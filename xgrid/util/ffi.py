@@ -55,7 +55,7 @@ class Jit:
 
             args.extend([name, "-o", name + ".so"])
 
-            process = Popen(args, stdout=PIPE, stderr=PIPE)
+            process = Popen(args, stderr=PIPE)
             if process.wait() != 0:
                 err_msg = cast(IO[bytes], process.stderr).read().decode()
                 self.logger.dead_multiln(
