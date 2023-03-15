@@ -30,14 +30,16 @@ class Test:
         return decorator
 
     def summary(self):
+        ignore = self.total - self.passed - self.failed
         msg = [
-            f"Summary: {self.total} tests, {self.passed} passed, {self.failed} failed"]
+            f"Summary: {self.total} tests, {self.passed} passed, {self.failed} failed, {ignore} ignore."]
         if self.failed != 0:
             msg.append("The following case(s) have failed:")
             msg.extend(
                 map(lambda x: f"  {x[0]} ({x[1].__class__.__name__})", self.fail_case))
-        self.logger.log_multiln(
-            LogLevel.Done if self.failed == 0 else LogLevel.Fail, msg)
+
+        log_level = LogLevel.Done if self.passed == self.total else LogLevel.Fail if self.failed != 0 else LogLevel.Warn
+        self.logger.log_multiln(log_level, msg)
 
 
 test = Test("xgrid")
@@ -46,8 +48,7 @@ test = Test("xgrid")
 @test.case("addition")
 def add(a: int, b: int) -> None:
     assert a + b == b + a
-
-
 add(1, 2)
+
 
 test.summary()
