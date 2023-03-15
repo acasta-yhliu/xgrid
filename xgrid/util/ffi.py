@@ -15,7 +15,7 @@ class Library:
         self.logger = Logger(self)
         self.dylib = ctypes.cdll.LoadLibrary(name)
 
-    def function(self, entry_point: str, argtypes: Iterable[BaseType], restype: BaseType) -> Callable:
+    def function(self, entry_point: str, argtypes: list[BaseType], restype: BaseType) -> Callable:
         handler = getattr(self.dylib, entry_point)
         if not handler:
             self.logger.dead(f"failed to get function '{entry_point}")
@@ -24,16 +24,14 @@ class Library:
             if isinstance(argt, Void):
                 self.logger.dead("unexpected void type in arguments")
 
-        handler.argtypes = map(lambda x: x.ctype, argtypes)
         if not isinstance(restype, Void):
             handler.restype = restype.ctype
 
-        serializer = map(lambda x: x.serialize, argtypes)
-
         def wrapper(*args):
-            args = map(lambda x: x[0](x[1]), zip(  # type: ignore
-                serializer, args))
-            return restype.deserialize(handler(*args))
+            if len(args) != len(argtypes):
+                raise TypeError(
+                    f"this function takes {len(argtypes)} argument ({len(args)} given)")
+            return restype.deserialize(handler(*map(lambda x: x[0](x[1]), zip(map(lambda x: x.serialize, argtypes), args))))
         return wrapper
 
 
@@ -83,8 +81,8 @@ class Compiler:
             process = Popen(args, stderr=PIPE)
             if process.wait() != 0:
                 err_msg = cast(IO[bytes], process.stderr).read().decode()
-                self.logger.dead_multiln(
-                    [f"failed to compile '{name}' due to:", err_msg])
+                self.logger.dead(
+                    f"failed to compile '{name}' due to:", err_msg)
 
         self.logger.info(
             f"jit compiled '{name}' {'with' if cached else 'without'} cache to '{libname}'")

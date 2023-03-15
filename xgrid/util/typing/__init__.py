@@ -9,10 +9,8 @@ class BaseType:
     def ctype(self):
         pass
 
-    @property
-    def serialize(self):
-        return self.ctype
+    def serialize(self, value):
+        pass
 
-    @property
-    def deserialize(self):
-        return lambda x: x
+    def deserialize(self, value):
+        return value

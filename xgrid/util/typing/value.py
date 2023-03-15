@@ -20,6 +20,12 @@ class Boolean(Value):
     def ctype(self):
         return ctypes.c_bool
 
+    def serialize(self, value):
+        if not isinstance(value, bool):
+            raise TypeError(
+                f"argument expect to have type bool, but got {type(value)}")
+        return ctypes.c_bool(value)
+
     def __repr__(self) -> str:
         return "Boolean"
 
@@ -46,11 +52,17 @@ class Integer(Number):
     def ctype(self):
         return self._ctype
 
+    def serialize(self, value):
+        if not isinstance(value, int):
+            raise TypeError(
+                f"argument expect to have type int, but got {type(value)}")
+        return self._ctype(value)
+
     def __repr__(self) -> str:
         return f"Integer({self.width_bits})"
 
 
-@ dataclass
+@dataclass
 class Floating(Number):
     __concrete_typing__ = True
 
@@ -58,9 +70,15 @@ class Floating(Number):
         assert self.width_bytes in (4, 8)
         self._ctype = ctypes.c_float if self.width_bytes == 4 else ctypes.c_double
 
-    @ property
+    @property
     def ctype(self):
         return self._ctype
+
+    def serialize(self, value):
+        if not isinstance(value, float):
+            raise TypeError(
+                f"argument expect to have type float, but got {type(value)}")
+        return self._ctype(value)
 
     def __repr__(self) -> str:
         return f"Floating({self.width_bits})"

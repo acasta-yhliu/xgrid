@@ -56,9 +56,7 @@ class Test:
                     f"    \033[1;{'31mfailed' if exc else '32mpassed'}\033[0m in {(end_time - begin_time):.6f}s")
                 out_msg, err_msg = out.read(), err.read()
                 if exc:
-                    print("exception:", exc)
-                    print("stdout:", out_msg)
-                    print("stderr:", err_msg)
+                    raise exc
                     failed_cases.append((name, (exc, out_msg, err_msg)))
                 else:
                     passed_cases.append((name, out_msg, err_msg))
@@ -91,7 +89,7 @@ def ffi_compiler() -> None:
     test.log(
         f"initialized compiler, cacheroot = {cc.cacheroot}, cc = {cc.cc}")
 
-    simple_src = "#include<stdio.h>\n\nfloat universe(float a, float b) { return a + b; }"
+    simple_src = "#include <stdio.h>\n#include <stdbool.h>\n\nfloat universe(float a, float b) { return a + b; }\nvoid branch(bool a) { if(a) printf(\"branch function from c works fine\\n\"); }"
 
     cc.compile(simple_src)
     lib_name = cc.compile(simple_src)
@@ -117,6 +115,7 @@ def ffi_library() -> None:
     float_add = lib.function(
         "universe", [Floating(4), Floating(4)], Floating(4))
     assert float_add(1.2, 2.3) == 3.5
+    test.log(f"fetched and tested dynamic function 'float universe(float, float)'")
 
 
 test.run()

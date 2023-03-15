@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Iterable, NoReturn
+from typing import NoReturn
 from xgrid.util.console import Console, Style, Foreground, stdout, stderr
 
 
@@ -29,35 +29,12 @@ class Logger:
     def __init__(self, obj: object) -> None:
         self.name = f"{obj.__module__}.{obj.__class__.__qualname__}@{id(obj)}"
 
-    def log(self, level: LogLevel, msg: str) -> None:
-        if level.value >= Logger.level.value:
-            targets = Logger.stdouts if level.value <= LogLevel.done.value else Logger.stderrs
-            for target in targets:
-                target.print("[ ").print(level.name, level.style, level.foreground).println(
-                    f" | {self.name} ] {msg}")
-
-    def info(self, msg: str) -> None:
-        self.log(LogLevel.info, msg)
-
-    def done(self, msg: str) -> None:
-        self.log(LogLevel.done, msg)
-
-    def warn(self, msg: str) -> None:
-        self.log(LogLevel.warn, msg)
-
-    def fail(self, msg: str) -> None:
-        self.log(LogLevel.fail, msg)
-
-    def dead(self, msg: str) -> NoReturn:
-        self.log(LogLevel.dead, msg)
-        raise Exception(msg)
-
-    def log_multiln(self, level: LogLevel, lines: Iterable[str]) -> None:
+    def log(self, level: LogLevel, *msg: str) -> None:
         first_line = True
         if level.value >= Logger.level.value:
             targets = Logger.stdouts if level.value <= LogLevel.done.value else Logger.stderrs
             for target in targets:
-                for line in lines:
+                for line in msg:
                     if first_line:
                         target.print("[ ").print(level.name, level.style, level.foreground).println(
                             f" | {self.name} ] {line}")
@@ -65,18 +42,18 @@ class Logger:
                     else:
                         target.println(line)
 
-    def info_multiln(self, lines: Iterable[str]) -> None:
-        self.log_multiln(LogLevel.info, lines)
+    def info(self, *msg: str) -> None:
+        self.log(LogLevel.info, *msg)
 
-    def done_multiln(self, lines: Iterable[str]) -> None:
-        self.log_multiln(LogLevel.done, lines)
+    def done(self, *msg: str) -> None:
+        self.log(LogLevel.done, *msg)
 
-    def warn_multiln(self, lines: Iterable[str]) -> None:
-        self.log_multiln(LogLevel.warn, lines)
+    def warn(self, *msg: str) -> None:
+        self.log(LogLevel.warn, *msg)
 
-    def fail_multiln(self, lines: Iterable[str]) -> None:
-        self.log_multiln(LogLevel.fail, lines)
+    def fail(self, *msg: str) -> None:
+        self.log(LogLevel.fail, *msg)
 
-    def dead_multiln(self, lines: Iterable[str]) -> NoReturn:
-        self.log_multiln(LogLevel.dead, lines)
-        raise Exception("\n".join(lines))
+    def dead(self, *msg: str) -> NoReturn:
+        self.log(LogLevel.dead, *msg)
+        raise Exception(msg)
