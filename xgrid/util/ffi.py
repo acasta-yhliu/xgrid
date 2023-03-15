@@ -7,8 +7,12 @@ from typing import IO, Iterable, cast
 from xgrid.util.logging import Logger
 
 
-class Jit:
-    "jit driver to perform compiling and linking to dynamic library"
+class Library:
+    pass
+
+
+class Compiler:
+    "compiler driver to perform compiling and linking to dynamic library"
 
     def __init__(self, *, cacheroot: str, cc: Iterable[str]) -> None:
         self.logger = Logger(self)
@@ -26,7 +30,7 @@ class Jit:
         self.cc = search_cc(cc)
 
         self.logger.info(
-            f"jit initialized with cacheroot = '{self.cacheroot}', cc = '{self.cc}'")
+            f"compiler initialized with cacheroot = '{self.cacheroot}', cc = '{self.cc}'")
 
     def compile(self, source: str, cflags: Iterable[str] = []):
         args = [self.cc, "-fpic", "-shared"]

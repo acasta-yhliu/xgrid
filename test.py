@@ -3,7 +3,7 @@ import os
 import shutil
 from typing import Callable
 from xgrid.util.console import Console
-from xgrid.util.ffi import Jit
+from xgrid.util.ffi import Compiler
 from xgrid.util.logging import Logger
 
 
@@ -84,7 +84,7 @@ def jitdriver() -> None:
     if os.path.exists(f"./{cacheroot}"):
         shutil.rmtree(f"./{cacheroot}", ignore_errors=True)
 
-    jit = Jit(cacheroot=".xgridtest", cc=["gcc", "clang"])
+    jit = Compiler(cacheroot=".xgridtest", cc=["gcc", "clang"])
 
     assert os.path.exists(f"./{cacheroot}")
     assert jit.cc == "/usr/bin/gcc", "fetched wrong cc, expect /usr/bin/gcc"
