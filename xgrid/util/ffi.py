@@ -1,14 +1,40 @@
 import os
+import ctypes
 from hashlib import md5
 from shutil import which
 from subprocess import PIPE, Popen
-from typing import IO, Iterable, cast
+from typing import IO, Callable, Iterable, cast
 
 from xgrid.util.logging import Logger
+from xgrid.util.typing import BaseType
+from xgrid.util.typing.value import Void
 
 
 class Library:
-    pass
+    def __init__(self, name: str) -> None:
+        self.logger = Logger(self)
+        self.dylib = ctypes.cdll.LoadLibrary(name)
+
+    def function(self, entry_point: str, argtypes: Iterable[BaseType], restype: BaseType) -> Callable:
+        handler = getattr(self.dylib, entry_point)
+        if not handler:
+            self.logger.dead(f"failed to get function '{entry_point}")
+
+        for argt in argtypes:
+            if isinstance(argt, Void):
+                self.logger.dead("unexpected void type in arguments")
+
+        handler.argtypes = map(lambda x: x.ctype, argtypes)
+        if not isinstance(restype, Void):
+            handler.restype = restype.ctype
+
+        serializer = map(lambda x: x.serialize, argtypes)
+
+        def wrapper(*args):
+            args = map(lambda x: x[0](x[1]), zip(  # type: ignore
+                serializer, args))
+            return restype.deserialize(handler(*args))
+        return wrapper
 
 
 class Compiler:
@@ -40,6 +66,7 @@ class Compiler:
 
         name = os.path.join(self.cacheroot, md5(
             source.encode()).hexdigest() + ".c")
+        libname = name + ".so"
 
         cached = False
 
@@ -51,7 +78,7 @@ class Compiler:
             with open(name, "w") as sf:
                 sf.write(source)
 
-            args.extend([name, "-o", name + ".so"])
+            args.extend([name, "-o", libname])
 
             process = Popen(args, stderr=PIPE)
             if process.wait() != 0:
@@ -60,4 +87,6 @@ class Compiler:
                     [f"failed to compile '{name}' due to:", err_msg])
 
         self.logger.info(
-            f"jit compiled '{name}' {'with' if cached else 'without'} cache")
+            f"jit compiled '{name}' {'with' if cached else 'without'} cache to '{libname}'")
+
+        return libname
