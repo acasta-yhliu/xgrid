@@ -4,27 +4,27 @@ import sys
 
 
 class Style(Enum):
-    Normal = 0
-    Bold = 1
-    Light = 2
-    Italic = 3
-    Underlined = 4
-    Blink = 5
+    normal = 0
+    bold = 1
+    light = 2
+    italic = 3
+    underlined = 4
+    blink = 5
 
 
 class Foreground(Enum):
-    Black = 30
-    Red = 31
-    Green = 32
-    Yellow = 33
-    Blue = 34
-    Purple = 35
-    Cyan = 36
-    White = 37
+    black = 30
+    red = 31
+    green = 32
+    yellow = 33
+    blue = 34
+    purple = 35
+    cyan = 36
+    white = 37
 
 
 class Console:
-    """Lightweight implementation of a colored console, support ASCII escape sequence to modify"""
+    """lightweight implementation of a colored console, support ASCII escape sequence to modify"""
 
     def __init__(self, textio: TextIO) -> None:
         self.io = textio
