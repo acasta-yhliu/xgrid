@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Iterable, NoReturn
-from xgrid.util.console import Console, Style, Foreground, stdout
+from xgrid.util.console import Console, Style, Foreground, stdout, stderr
 
 
 class LogLevel(Enum):
@@ -22,15 +22,17 @@ class LogLevel(Enum):
 class Logger:
     """basic logging system, supports colored prompt"""
 
-    targets: list[Console] = [stdout]
+    stdouts: list[Console] = [stdout]
+    stderrs: list[Console] = [stderr]
     level = LogLevel.info
 
-    def __init__(self, name: str) -> None:
-        self.name = name
+    def __init__(self, obj: object) -> None:
+        self.name = f"{obj.__module__}.{obj.__class__.__qualname__}@{id(obj)}"
 
     def log(self, level: LogLevel, msg: str) -> None:
         if level.value >= Logger.level.value:
-            for target in Logger.targets:
+            targets = Logger.stdouts if level.value <= LogLevel.done.value else Logger.stderrs
+            for target in targets:
                 target.print("[ ").print(level.name, level.style, level.foreground).println(
                     f" | {self.name} ] {msg}")
 
@@ -53,7 +55,8 @@ class Logger:
     def log_multiln(self, level: LogLevel, lines: Iterable[str]) -> None:
         first_line = True
         if level.value >= Logger.level.value:
-            for target in Logger.targets:
+            targets = Logger.stdouts if level.value <= LogLevel.done.value else Logger.stderrs
+            for target in targets:
                 for line in lines:
                     if first_line:
                         target.print("[ ").print(level.name, level.style, level.foreground).println(

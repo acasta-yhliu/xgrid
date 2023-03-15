@@ -10,26 +10,20 @@ from xgrid.util.logging import Logger
 class Jit:
     "jit driver to perform compiling and linking to dynamic library"
 
-    def __init__(self, name: str, *, cc: list[str] = ["gcc", "clang"]) -> None:
-        self.logger = Logger(
-            f"{self.__module__}.{self.__class__.__qualname__}")
+    def __init__(self, *, cacheroot: str, cc: Iterable[str]) -> None:
+        self.logger = Logger(self)
 
-        self.cacheroot = f"./.{name}"
+        self.cacheroot = os.path.join(".", cacheroot)
         if not os.path.exists(self.cacheroot):
             os.makedirs(self.cacheroot)
 
-        def search_cc(seq: list[str]) -> str | None:
+        def search_cc(seq: Iterable[str]) -> str:
             for cc in seq:
                 which_cc = which(cc)
                 if which_cc:
                     return which_cc
-            return None
-
-        local_cc = search_cc(cc)
-        if local_cc is None:
-            self.logger.dead(
-                f"jit failed to locate cc in {cc}")
-        self.cc: str = local_cc
+            self.logger.dead(f"failed to locate cc in {seq}")
+        self.cc = search_cc(cc)
 
         self.logger.info(
             f"jit initialized with cacheroot = '{self.cacheroot}', cc = '{self.cc}'")

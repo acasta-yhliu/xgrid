@@ -49,3 +49,4 @@ class Console:
 
 
 stdout = Console(sys.stdout)
+stderr = Console(sys.stderr)
