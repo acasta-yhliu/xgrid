@@ -82,3 +82,28 @@ class Floating(Number):
 
     def __repr__(self) -> str:
         return f"Floating({self.width_bits})"
+
+
+@dataclass
+class Structure(Value):
+    __concrete_typing__ = True
+
+    dataclass: type
+    name: str
+    elements: tuple[tuple[str, Value], ...]
+
+    def __post_init__(self):
+        self.elements_map = dict(self.elements)
+
+    @property
+    def ctype(self):
+        return super().ctype
+
+    def serialize(self, value):
+        return super().serialize(value)
+
+    def deserialize(self, value):
+        return super().deserialize(value)
+
+    def __repr__(self) -> str:
+        return self.name
