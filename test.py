@@ -3,6 +3,7 @@ import os
 import shutil
 import time
 from typing import Callable
+import xgrid
 from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
@@ -117,5 +118,6 @@ def ffi_library() -> None:
     assert float_add(1.2, 2.3) == 3.5
     test.log(f"fetched and tested dynamic function 'float universe(float, float)'")
 
+xgrid.init()
 
 test.run()

@@ -26,8 +26,9 @@ class Logger:
     stderrs: list[Console] = [stderr]
     level = LogLevel.info
 
-    def __init__(self, obj: object) -> None:
-        self.name = f"{obj.__module__}.{obj.__class__.__qualname__}@{id(obj)}"
+    def __init__(self, obj: object | str) -> None:
+        self.name = obj if isinstance(
+            obj, str) else f"{obj.__module__}.{obj.__class__.__qualname__}@{id(obj)}"
 
     def log(self, level: LogLevel, *msg: str) -> None:
         first_line = True

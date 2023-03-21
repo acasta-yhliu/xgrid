@@ -100,6 +100,7 @@ class Structure(Value):
         return super().ctype
 
     def serialize(self, value):
+        # TODO: Implement serialize and deserialize for structure type
         return super().serialize(value)
 
     def deserialize(self, value):
