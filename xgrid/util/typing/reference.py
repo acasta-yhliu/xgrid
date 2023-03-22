@@ -29,9 +29,9 @@ class Pointer(Reference):
 
 
 @dataclass
-class Array(Reference):
+class Grid(Reference):
     element: Value
     dimension: int
 
     def __repr__(self) -> str:
-        return f"Array[{','.join(repeat(':', self.dimension))}] of {repr(self.element)}"
+        return f"Grid({self.dimension}) of {repr(self.element)}"

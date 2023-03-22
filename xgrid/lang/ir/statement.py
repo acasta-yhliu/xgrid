@@ -79,4 +79,5 @@ class Assignment(Statement):
     value: Expression
 
     def write(self, format: ElementFormat):
-        format.println(self.variable, plain(":"), idtype(repr(self.variable.type)), plain("="), self.value)
+        format.println(self.variable, plain(":"), idtype(
+            repr(self.variable.type)), plain("="), self.value)
