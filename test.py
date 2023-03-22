@@ -4,7 +4,10 @@ import shutil
 import time
 from typing import Callable
 import xgrid
-from xgrid.util.console import Console
+from xgrid.lang.ir import Location
+from xgrid.lang.ir.expression import Expression
+from xgrid.lang.ir.statement import Break, Continue, If
+from xgrid.util.console import Console, ElementFormat
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.typing.value import Floating
@@ -118,6 +121,15 @@ def ffi_library() -> None:
     assert float_add(1.2, 2.3) == 3.5
     test.log(f"fetched and tested dynamic function 'float universe(float, float)'")
 
+
 xgrid.init()
 
 test.run()
+
+format = ElementFormat()
+
+loc = Location("test.py", "main", 129)
+
+ir = If(loc, Expression(loc), [Break(loc), Break(loc)], [Continue(loc)])
+ir.write(format)
+format.write()
