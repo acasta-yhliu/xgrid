@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TextIO
+from typing import Iterable, TextIO
 import sys
 
 
@@ -53,107 +53,89 @@ stderr = Console(sys.stderr)
 
 
 class Element:
-    def write(self, device: TextIO):
-        pass
-
-
-class Blank(Element):
-    def __init__(self, length: int) -> None:
-        super().__init__()
-        self.length = length
-
-    def write(self, device: TextIO):
-        device.write(" " * self.length)
-
-
-class Endline(Element):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def write(self, device: TextIO):
-        device.write("\n")
-
-
-class Text(Element):
     def __init__(self, text: str, style: Style | None = None, foreground: Foreground | None = None) -> None:
         self.text = text
         self.style = style
         self.foreground = foreground
 
-    def write(self, device: TextIO):
-        if device.isatty():
+    def stringify(self, isatty: bool):
+        if isatty:
             style_str = self.style.value if self.style else ""
             foreground_str = self.foreground.value if self.foreground else ""
-            device.write(
-                f"\033[{style_str};{foreground_str}m" + self.text + "\033[0m")
+            return f"\033[{style_str};{foreground_str}m" + self.text + "\033[0m"
         else:
-            device.write(self.text)
+            return self.text
 
 
-class Formattable:
+class Elementable:
     def write(self, format: "ElementFormat"):
         pass
 
 
-class Indentable:
+class ElementFormat:
+    class IndentationGuard:
+        def __init__(self, format: "ElementFormat") -> None:
+            self.format = format
+
+        def __enter__(self) -> None:
+            self.format.indents += self.format.indent_size
+
+        def __exit__(self, _a, _b, _c) -> None:
+            self.format.indents -= self.format.indent_size
+
+    class Line:
+        def __init__(self, indent: int, elements: list[Element]) -> None:
+            self.indent = indent
+            self.elements = elements
+
     def __init__(self, indent_size: int = 2) -> None:
         self.indents = 0
         self.indent_size = indent_size
 
-    def indent(self) -> "IndentationGuard":
-        return IndentationGuard(self)
+        self.lines: list[ElementFormat.Line] = []
+        self.line_buffer: list[Element] = []
 
+    def print(self, *elements: Element | Elementable):
+        for element in elements:
+            if isinstance(element, Elementable):
+                element.write(self)
+            else:
+                self.line_buffer.append(element)
 
-class IndentationGuard:
-    def __init__(self, indentable: Indentable) -> None:
-        self.indentable = indentable
+    def println(self, *elements: Element | Elementable):
+        self.print(*elements)
+        self.lines.append(ElementFormat.Line(
+            self.indents, self.line_buffer))
+        self.line_buffer = []
 
-    def __enter__(self) -> None:
-        self.indentable.indents += self.indentable.indent_size
-
-    def __exit__(self, _a, _b, _c) -> None:
-        self.indentable.indents -= self.indentable.indent_size
-
-
-class ElementFormat(Indentable):
-    endline_element = Endline()
-    space_element = Blank(1)
-
-    def __init__(self, indent_size: int = 2) -> None:
-        super().__init__(indent_size)
-        self.elements: list[Element] = []
-
-    def begin(self) -> "ElementFormat":
-        self.elements.append(Blank(self.indents))
-        return self
-
-    def print(self, text: str | Formattable, style: Style | None = None, foreground: Foreground | None = None) -> "ElementFormat":
-        if isinstance(text, str):
-            self.elements.append(Text(text, style, foreground))
-        else:
-            text.write(self)
-        return self
-
-    def space(self) -> "ElementFormat":
-        self.elements.append(ElementFormat.space_element)
-        return self
-
-    def end(self: "ElementFormat") -> "ElementFormat":
-        self.elements.append(ElementFormat.endline_element)
-        return self
+    def indent(self) -> "ElementFormat.IndentationGuard":
+        return ElementFormat.IndentationGuard(self)
 
     def write(self, device: TextIO = sys.stdout):
-        for element in self.elements:
-            element.write(device)
+        isatty = device.isatty()
+        for line in self.lines:
+            if any(line.elements):
+                device.write(" " * line.indent)
+                device.write(
+                    " ".join(map(lambda x: x.stringify(isatty), line.elements)))
+            device.write("\n")
 
 
-class LineFormat(Indentable):
-    def __init__(self, indent_size: int = 2) -> None:
-        super().__init__(indent_size)
-        self.lines: list[str] = []
+def kw(text: str):
+    return Element(text, None, Foreground.blue)
 
-    def println(self, text: str):
-        self.lines.append(" " * self.indents + text + "\n")
 
-    def write(self, device: TextIO = sys.stdout):
-        device.writelines(self.lines)
+def idvar(text: str):
+    return Element(text, None, Foreground.cyan)
+
+
+def idtype(text: str):
+    return Element(text, None, Foreground.green)
+
+
+def idfunc(text: str):
+    return Element(text, None, Foreground.yellow)
+
+
+def plain(text: str):
+    return Element(text)
