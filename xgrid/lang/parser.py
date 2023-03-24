@@ -2,9 +2,10 @@ import ast
 import inspect
 from itertools import chain
 import textwrap
-from typing import Literal
+from typing import cast
 from xgrid.lang.ir import Definition, Location
-from xgrid.lang.ir.statement import Return
+from xgrid.lang.ir.expression import Expression
+from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
 
 from xgrid.util.logging import Logger
 
@@ -29,12 +30,16 @@ class Parser:
         ast.fix_missing_locations(ast_definition)
         ast.increment_lineno(ast_definition, lineno)
 
-        self.context: str = mode
+        self.context_stack = [mode]
         self.ir = self.visit(ast_definition)
 
     @property
     def result(self):
         return self.ir
+
+    @property
+    def context(self):
+        return self.context_stack[-1]
 
     def syntax_error(self, node: ast.AST, message: str):
         self.logger.dead(
@@ -50,6 +55,9 @@ class Parser:
         else:
             return method(node)
 
+    def visits(self, l: list[ast.stmt]):
+        return list(chain.from_iterable(map(self.visit, l)))  # type: ignore
+
     def location(self, node: ast.AST):
         return Location(self.file, self.func_name, node.lineno - 1)
 
@@ -57,16 +65,42 @@ class Parser:
         # extract annotation
 
         # extract body
-        body = list(chain(map(self.visit, node.body)))
+        body = self.visits(node.body)  # type: ignore
 
         return Definition(self.location(node), self.func_name)
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):
-        return [Return(self.location(node), None if node.value is None else self.visit(node.value))]
+        return Return(self.location(node), None if node.value is None else self.visit(node.value))
 
     def visit_Pass(self, node: ast.Pass):
         return []
 
     def visit_Break(self, node: ast.Break):
-        return [Break(self.location(node))]
+        return Break(self.location(node))
+
+    def visit_Continue(self, node: ast.Continue):
+        return Continue(self.location(node))
+
+    def visit_If(self, node: ast.If):
+        condition = cast(Expression, self.visit(node.test))
+
+        self.context_stack.append("if")
+        body = self.visits(node.body)
+        orelse = self.visits(node.orelse)
+        self.context_stack.pop()
+
+        return If(self.location(node), condition, body, orelse)
+
+    def visit_While(self, node: ast.While):
+        condition = cast(Expression, self.visit(node.test))
+
+        self.context_stack.append("if")
+        body = self.visits(node.body)
+        orelse = self.visits(node.orelse)
+        self.context_stack.pop()
+
+        return While(self.location(node), condition, body, orelse)
+
+    def visit_Expr(self, node: ast.Expr):
+        return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
