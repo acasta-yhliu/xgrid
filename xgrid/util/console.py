@@ -125,6 +125,10 @@ def kw(text: str):
     return Element(text, None, Foreground.blue)
 
 
+def const(text: str):
+    return Element(text, Style.italic, None)
+
+
 def idvar(text: str):
     return Element(text, None, Foreground.cyan)
 
