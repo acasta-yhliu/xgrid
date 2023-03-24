@@ -9,7 +9,7 @@ class Operator:
         self.mode = mode
 
     def __call__(self, *args: Any) -> Any:
-        self.ir = Parser(self.func, self.mode).parse()
+        self.ir = Parser(self.func, self.mode).result
 
 
 def kernel(func):

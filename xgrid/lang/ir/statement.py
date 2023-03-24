@@ -13,10 +13,11 @@ class Statement(IR):
 
 @dataclass
 class Return(Statement):
-    value: Expression
+    value: Expression | None
 
     def write(self, format: ElementFormat):
-        format.println(kw("return"), self.value)
+        format.println(kw("return"), plain(
+            "") if self.value is None else self.value)
 
 
 @dataclass

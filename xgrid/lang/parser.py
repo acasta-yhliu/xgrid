@@ -1,7 +1,10 @@
 import ast
 import inspect
+from itertools import chain
 import textwrap
 from typing import Literal
+from xgrid.lang.ir import Definition, Location
+from xgrid.lang.ir.statement import Return
 
 from xgrid.util.logging import Logger
 
@@ -11,8 +14,8 @@ class Parser:
         self.logger = Logger(self)
 
         # extract source related information
-        self.file = inspect.getsourcefile(func)
-        self.file = "<unknown>" if self.file is None else self.file
+        file = inspect.getsourcefile(func)
+        self.file = "<unknown>" if file is None else file
 
         self.func_name = func.__name__
 
@@ -29,7 +32,8 @@ class Parser:
         self.context: str = mode
         self.ir = self.visit(ast_definition)
 
-    def parse(self):
+    @property
+    def result(self):
         return self.ir
 
     def syntax_error(self, node: ast.AST, message: str):
@@ -46,5 +50,23 @@ class Parser:
         else:
             return method(node)
 
+    def location(self, node: ast.AST):
+        return Location(self.file, self.func_name, node.lineno - 1)
+
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        return None
+        # extract annotation
+
+        # extract body
+        body = list(chain(map(self.visit, node.body)))
+
+        return Definition(self.location(node), self.func_name)
+
+    # ===== statements =====
+    def visit_Return(self, node: ast.Return):
+        return [Return(self.location(node), None if node.value is None else self.visit(node.value))]
+
+    def visit_Pass(self, node: ast.Pass):
+        return []
+
+    def visit_Break(self, node: ast.Break):
+        return [Break(self.location(node))]

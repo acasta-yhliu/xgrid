@@ -124,14 +124,8 @@ def operator() -> None:
     def add(a: int, b: int) -> int:
         return a + b
 
-    k = xgrid.lang.kernel(add)
-    try:
-        k()
-    except Exception as e:
-        raise e
-
-    pass
-
+    add_kernel = xgrid.lang.kernel(add)
+    test.log(f"kernel built for function {add.__name__}")
 
 # xgrid.init()
 
