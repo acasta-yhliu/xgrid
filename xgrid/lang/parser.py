@@ -1,14 +1,15 @@
 import ast
+from functools import reduce
 import inspect
 from itertools import chain
 import textwrap
 from typing import cast
 from xgrid.lang.ir import Definition, Location
-from xgrid.lang.ir.expression import BinaryOperator, Constant, Expression, Unary, UnaryOperator
+from xgrid.lang.ir.expression import Binary, BinaryOperator, Condition, Constant, Expression, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
 
 from xgrid.util.logging import Logger
-from xgrid.util.typing.value import Boolean, Floating, Integer, Number
+from xgrid.util.typing.value import Boolean, Floating, Integer, Number, Value
 
 
 class OperatorMap:
@@ -146,10 +147,9 @@ class Parser:
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
         optype = type(node.op)
-
         if optype not in OperatorMap.unary:
             self.syntax_error(
-                node, f"Invalid unary operator '{optype.__name__}'")
+                node, f"Unsupported unary operator '{optype.__name__}'")
         unary_op = OperatorMap.unary[optype]
 
         right = cast(Expression, self.visit(node.operand))
@@ -160,4 +160,68 @@ class Parser:
         return Unary(self.location(node), right.type, right, unary_op)
 
     def visit_BinOp(self, node: ast.BinOp):
-        pass
+        optype = type(node.op)
+        if optype not in OperatorMap.binary:
+            self.syntax_error(
+                node, f"Unsupported binary operator '{optype.__name__}'")
+        binary_op = OperatorMap.binary[optype]
+
+        left = cast(Expression, self.visit(node.left))
+        right = cast(Expression, self.visit(node.right))
+        if not isinstance(left.type, Number) or not isinstance(right.type, Number) or left.type != right.type:
+            self.syntax_error(
+                node, f"Incompatible binary operator '{binary_op.value}' with type '{left.type}' and '{right.type}'")
+
+        return Binary(self.location(node), left.type, left, right, binary_op)
+
+    def visit_BoolOp(self, node: ast.BoolOp):
+        location = self.location(node)
+        op = OperatorMap.binary[type(node.op)]
+        values = [cast(Expression, self.visit(i)) for i in node.values]
+        for value in values:
+            if not isinstance(value.type, Boolean):
+                self.syntax_error(
+                    node, f"Incompatible boolean operator '{op.value}' with '{value.type}'")
+        return reduce(lambda x, y: Binary(location, Boolean(), x, y, op), values)
+
+    def visit_Compare(self, node: ast.Compare):
+        location = self.location(node)
+        left = cast(Expression, self.visit(node.left))
+        if not isinstance(left.type, Number):
+            self.syntax_error(
+                node, f"Incompatible compare expression with type '{left.type}'")
+
+        comparators = [cast(Expression, self.visit(i))
+                       for i in node.comparators]
+        ops = [OperatorMap.binary[type(i)] for i in node.ops]
+
+        for i, comparator in enumerate(comparators):
+            if comparator.type != left.type:
+                self.syntax_error(
+                    node, f"Incompatible compare operator '{ops[i].value}' with type '{left.type}' and '{comparator.type}'")
+
+        boolean = Boolean()
+        return reduce(lambda x, y: Binary(location, boolean, x, y, BinaryOperator.And),
+                      [Binary(location, boolean, left, comparators[i], ops[i]) for i in range(len(ops))])
+
+    def visit_IfExp(self, node: ast.IfExp):
+        condition = cast(Expression, self.visit(node.test))
+        if not isinstance(condition.type, Boolean):
+            self.syntax_error(
+                node, f"Incompatible condition type '{condition.type}' of if expression")
+        body = cast(Expression, self.visit(node.body))
+        orelse = cast(Expression, self.visit(node.orelse))
+        if body.type != orelse.type or not isinstance(body.type, Value):
+            self.syntax_error(
+                node, f"Incompatible type '{body.type}' and '{orelse.type}' of if expression")
+        return Condition(self.location(node), body.type, condition, body, orelse)
+
+    def visit_Name(self, node: ast.Name):
+        return self.resolve_name(node.id, node.ctx, [])
+
+    def visit_Subscript(self, node: ast.Subscript):
+        if self.context not in ("kernel", "critical"):
+            self.syntax_error(
+                node, f"Incompatible subscript under context '{self.context}'")
+
+        critical = self.context == "kernel-critical"

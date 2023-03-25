@@ -126,6 +126,7 @@ def operator() -> None:
 
     add_kernel = xgrid.lang.kernel(add)
     test.log(f"kernel built for function {add.__name__}")
+    add_kernel()
 
 # xgrid.init()
 

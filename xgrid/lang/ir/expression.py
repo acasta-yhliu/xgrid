@@ -90,7 +90,7 @@ class Constant(Expression):
 
 
 @dataclass
-class Access(Expression):
+class Identifier(Expression):
     variable: Variable
     attributes: list[str]
     context: Literal["load", "store"]
