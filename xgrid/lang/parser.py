@@ -4,10 +4,41 @@ from itertools import chain
 import textwrap
 from typing import cast
 from xgrid.lang.ir import Definition, Location
-from xgrid.lang.ir.expression import Expression
+from xgrid.lang.ir.expression import BinaryOperator, Constant, Expression, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
 
 from xgrid.util.logging import Logger
+from xgrid.util.typing.value import Boolean, Floating, Integer, Number
+
+
+class OperatorMap:
+    unary: dict[type[ast.unaryop], UnaryOperator] = {
+        ast.UAdd: UnaryOperator.Pos,
+        ast.USub: UnaryOperator.Neg,
+        ast.Not: UnaryOperator.Not
+    }
+
+    binary: dict[type[ast.operator | ast.cmpop | ast.boolop], BinaryOperator] = {
+        ast.Add: BinaryOperator.Add,
+        ast.Sub: BinaryOperator.Sub,
+        ast.Mult: BinaryOperator.Mul,
+        # ast.MatMult: BinaryOperator.Mat,
+        ast.Div: BinaryOperator.Div,
+        ast.Pow: BinaryOperator.Pow,
+        ast.Mod: BinaryOperator.Mod,
+
+        ast.Is: BinaryOperator.Is,
+        ast.IsNot: BinaryOperator.Nis,
+        ast.Eq: BinaryOperator.Eq,
+        ast.NotEq: BinaryOperator.Neq,
+        ast.Gt: BinaryOperator.Gt,
+        ast.GtE: BinaryOperator.Ge,
+        ast.Lt: BinaryOperator.Lt,
+        ast.LtE: BinaryOperator.Le,
+
+        ast.And: BinaryOperator.And,
+        ast.Or: BinaryOperator.Or
+    }
 
 
 class Parser:
@@ -104,3 +135,29 @@ class Parser:
 
     def visit_Expr(self, node: ast.Expr):
         return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
+
+    # ===== expressions =====
+    def visit_Constant(self, node: ast.Constant):
+        if type(node.value) not in (int, float, bool):
+            self.syntax_error(node, f"Invalid constant value '{node.value}'")
+        vtype = {int: Integer(0), float: Floating(0),
+                 bool: Boolean()}[node.value]
+        return Constant(self.location(node), vtype, node.value)
+
+    def visit_UnaryOp(self, node: ast.UnaryOp):
+        optype = type(node.op)
+
+        if optype not in OperatorMap.unary:
+            self.syntax_error(
+                node, f"Invalid unary operator '{optype.__name__}'")
+        unary_op = OperatorMap.unary[optype]
+
+        right = cast(Expression, self.visit(node.operand))
+        if (unary_op == UnaryOperator.Not and not isinstance(right.type, Boolean)) or (unary_op in (UnaryOperator.Pos, UnaryOperator.Neg) and not isinstance(right.type, Number)):
+            self.syntax_error(
+                node, f"Incompatible unary operator '{unary_op.value}' with type '{right.type}'")
+
+        return Unary(self.location(node), right.type, right, unary_op)
+
+    def visit_BinOp(self, node: ast.BinOp):
+        pass

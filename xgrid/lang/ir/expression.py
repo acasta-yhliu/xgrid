@@ -4,13 +4,12 @@ from typing import Literal
 
 from xgrid.lang.ir import IR, Variable
 from xgrid.util.console import ElementFormat, const, plain
+from xgrid.util.typing import BaseType
 
 
 @dataclass
 class Expression(IR):
-    @property
-    def type(self):
-        return getattr(self, "_type")
+    type: BaseType
 
     def write(self, format: ElementFormat):
         pass
@@ -23,7 +22,10 @@ class BinaryOperator(Enum):
     Div = "/"
     Pow = "^"
     Mod = "%"
+    # Mat = "@"
 
+    Is = "==="
+    Nis = "!=="
     Eq = "=="
     Gt = ">"
     Ge = ">="
@@ -33,6 +35,12 @@ class BinaryOperator(Enum):
 
     And = "&&"
     Or = "||"
+
+    def is_compare(self) -> bool:
+        return self in (BinaryOperator.Is, BinaryOperator.Nis, BinaryOperator.Eq, BinaryOperator.Gt, BinaryOperator.Ge, BinaryOperator.Lt, BinaryOperator.Le, BinaryOperator.Neq)
+
+    def is_logic(self) -> bool:
+        return self in (BinaryOperator.And, BinaryOperator.Or)
 
 
 class UnaryOperator(Enum):
@@ -84,6 +92,7 @@ class Constant(Expression):
 @dataclass
 class Access(Expression):
     variable: Variable
+    attributes: list[str]
     context: Literal["load", "store"]
 
     def write(self, format: ElementFormat):
