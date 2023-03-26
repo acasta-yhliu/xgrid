@@ -12,6 +12,18 @@ class Statement(IR):
 
 
 @dataclass
+class Definition(Statement):
+    name: str
+    body: list[Statement]
+
+    def write(self, format: ElementFormat):
+        format.println(kw("operator"), plain(self.name), kw("begin"))
+        with format.indent():
+            format.print(*self.body)
+        format.println(kw("end"))
+
+
+@dataclass
 class Return(Statement):
     value: Expression | None
 
@@ -82,3 +94,13 @@ class Assignment(Statement):
     def write(self, format: ElementFormat):
         format.println(self.variable, plain(":"), idtype(
             repr(self.variable.type)), plain("="), self.value)
+
+
+@dataclass
+class Inline(Statement):
+    source: str
+
+    def write(self, format: ElementFormat):
+        format.println(kw("inline"), kw("begin"))
+        format.print(plain(self.source))
+        format.println(kw("end"))

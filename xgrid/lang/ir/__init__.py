@@ -29,7 +29,3 @@ class Variable(Elementable):
     def write(self, format: ElementFormat):
         format.print(idvar("%" + self.name))
 
-
-@dataclass
-class Definition(IR):
-    name: str

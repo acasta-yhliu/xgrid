@@ -10,6 +10,7 @@ class Operator:
 
     def __call__(self, *args: Any) -> Any:
         self.ir = Parser(self.func, self.mode).result
+        return self.ir
 
 
 def kernel(func):

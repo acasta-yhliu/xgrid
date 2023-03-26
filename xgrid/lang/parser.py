@@ -1,15 +1,13 @@
 import ast
 from functools import reduce
 import inspect
-from itertools import chain
 import textwrap
 from typing import Iterable, NoReturn, cast
-from xgrid.lang.ir import Definition, Location, Variable
+from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
+from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, While
 
 from xgrid.util.logging import Logger
-from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Grid
 from xgrid.util.typing.value import Boolean, Floating, Integer, Number, Structure, Value
 
@@ -72,10 +70,11 @@ class Parser:
         ast.increment_lineno(ast_definition, lineno)
 
         self.context_stack = [mode]
-        self.ir = self.visit(ast_definition)
 
         self.scope: dict[str, Variable] = {}
         self.global_scope = func.__globals__
+
+        self.ir = self.visit(ast_definition)
 
     @property
     def result(self):
@@ -100,7 +99,14 @@ class Parser:
             return method(node)
 
     def visits(self, l: list[ast.stmt]):
-        return list(chain.from_iterable(map(self.visit, l)))  # type: ignore
+        result = []
+        for item in l:
+            visited = self.visit(item)
+            if isinstance(visited, list):
+                result.extend(visited)
+            else:
+                result.append(visited)
+        return result
 
     def location(self, node: ast.AST):
         return Location(self.file, self.func_name, node.lineno - 1)
@@ -109,9 +115,7 @@ class Parser:
         # extract annotation
 
         # extract body
-        body = self.visits(node.body)  # type: ignore
-
-        return Definition(self.location(node), self.func_name)
+        return Definition(self.location(node), self.func_name, self.visits(node.body))
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):
@@ -147,20 +151,30 @@ class Parser:
         return While(self.location(node), condition, body, orelse)
 
     def visit_Expr(self, node: ast.Expr):
-        # TODO: handle raw string
-        if self.context == "c" and isinstance(node.value, ast.Constant):
-            pass
-        return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
+        if self.context == "c":
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                docstring = node.value.value
+                return Inline(self.location(node), docstring)
+        else:
+            return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
 
-    # TODO: for loop, with statement
+    def visit_With(self, node: ast.With):
+        for withitem in node.items:
+            withitem.context_expr
+
+    # TODO: for loop, with statement, assign statement
 
     # ===== expressions =====
-    def visit_Constant(self, node: ast.Constant):
-        if type(node.value) not in (int, float, bool):
-            self.syntax_error(node, f"Invalid constant value '{node.value}'")
+    def parse_constant(self, node: ast.AST, constant):
         vtype = {int: Integer(0), float: Floating(0),
-                 bool: Boolean()}[node.value]
-        return Constant(self.location(node), vtype, node.value)
+                 bool: Boolean()}
+        if type(constant) not in vtype:
+            self.syntax_error(
+                node, f"Incompatible constant '{constant}' of type '{type(constant)}'")
+        return Constant(self.location(node), vtype[type(constant)], constant)
+
+    def visit_Constant(self, node: ast.Constant):
+        return self.parse_constant(node, node.value)
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
         optype = type(node.op)
@@ -233,13 +247,27 @@ class Parser:
                 node, f"Incompatible type '{body.type}' and '{orelse.type}' of if expression")
         return Condition(self.location(node), body.type, condition, body, orelse)
 
-    def resolve_chained(self, node: ast.Name | ast.Subscript, names: Iterable[str]):
+    def resolve_global(self, node: ast.AST, root_name: str, names: Iterable[str]):
+        if root_name not in self.global_scope:
+            self.syntax_error(node, f"Undefined identifier '{root_name}'")
+        resolved_names = [root_name]
+
+        scope = self.global_scope[root_name]
+        for attr in names:
+            try:
+                scope = scope[attr] if isinstance(
+                    scope, dict) else getattr(scope, attr)
+                resolved_names.append(attr)
+            except KeyError:
+                self.syntax_error(
+                    node, f"Undefined attribute '{attr}' of '{'.'.join(resolved_names)}'")
+
+        return scope
+
+    def resolve_Attribute(self, node: ast.Name | ast.Subscript, names: Iterable[str]):
         ctx = context(node.ctx)
 
-        def typecheck(root_type: BaseType, name_chain: Iterable[str]):
-            # TODO: type check structure access
-            return root_type
-
+        # extract the root
         if isinstance(node, ast.Subscript):
             root = cast(Terminal, self.visit(node))
         else:
@@ -248,13 +276,21 @@ class Parser:
                 root = Identifier(self.location(
                     node), variable.type, ctx, variable)
             except KeyError:
-                # TODO: resolve to global constant
-                return
+                # if not found in local, then try global
+                return self.parse_constant(node, self.resolve_global(node, node.id, names))
 
-        return Access(self.location(node), typecheck(root.type, names), ctx, root, list(names))
+        # type check to structure attribute
+        root_type = root.type
+        for name in names:
+            if not isinstance(root_type, Structure) or name not in root_type.elements_map:
+                self.syntax_error(
+                    node, f"Incompatible attribute '{name}' of type '{root_type}'")
+            root_type = root_type.elements_map[name]
+
+        return Access(self.location(node), root_type, ctx, root, list(names))
 
     def visit_Name(self, node: ast.Name):
-        return self.resolve_chained(node, [])
+        return self.resolve_Attribute(node, [])
 
     def visit_Attribute(self, node: ast.Attribute):
         name_chain = [node.attr]
@@ -270,7 +306,7 @@ class Parser:
                 self.syntax_error(
                     node, f"Unsupported Python syntax '{body.__class__.__name__}'")
 
-        return self.resolve_chained(body, reversed(name_chain))
+        return self.resolve_Attribute(body, reversed(name_chain))
 
     def visit_Subscript(self, node: ast.Subscript):
         # make sure the context is correct
@@ -278,6 +314,7 @@ class Parser:
             self.syntax_error(
                 node, f"Incompatible subscript under context '{self.context}'")
 
+        # TODO
         def extract_space_subscript(subscript: ast.Subscript, time_offset: int, is_critical: bool):
             if not isinstance(subscript.value, ast.Name):
                 self.syntax_error(

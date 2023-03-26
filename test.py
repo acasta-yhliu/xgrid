@@ -4,7 +4,7 @@ import shutil
 import time
 from typing import Callable
 import xgrid.lang
-from xgrid.util.console import Console
+from xgrid.util.console import Console, ElementFormat
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.typing.value import Floating
@@ -118,15 +118,19 @@ def ffi_library() -> None:
     assert float_add(1.2, 2.3) == 3.5
     test.log(f"fetched and tested dynamic function 'float universe(float, float)'")
 
+TEMP = 10
 
 @test.fact("lang.Operator")
 def operator() -> None:
     def add(a: int, b: int) -> int:
-        return a + b
+        return 1 + 2 + 5 + TEMP
 
     add_kernel = xgrid.lang.kernel(add)
     test.log(f"kernel built for function {add.__name__}")
-    add_kernel()
+    ir = add_kernel()
+    formatter = ElementFormat()
+    ir.write(formatter)
+    formatter.write()
 
 # xgrid.init()
 
