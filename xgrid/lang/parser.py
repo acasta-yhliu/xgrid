@@ -4,12 +4,14 @@ import inspect
 from itertools import chain
 import textwrap
 from typing import cast
-from xgrid.lang.ir import Definition, Location
-from xgrid.lang.ir.expression import Binary, BinaryOperator, Condition, Constant, Expression, Unary, UnaryOperator
+from xgrid.lang.ir import Definition, Location, Variable
+from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
 
 from xgrid.util.logging import Logger
-from xgrid.util.typing.value import Boolean, Floating, Integer, Number, Value
+from xgrid.util.typing import BaseType
+from xgrid.util.typing.reference import Grid
+from xgrid.util.typing.value import Boolean, Floating, Integer, Number, Structure, Value
 
 
 class OperatorMap:
@@ -42,6 +44,13 @@ class OperatorMap:
     }
 
 
+def context(ctx: ast.expr_context):
+    if type(ctx) == ast.Load:
+        return "load"
+    else:
+        return "store"
+
+
 class Parser:
     def __init__(self, func, mode: str) -> None:
         self.logger = Logger(self)
@@ -64,6 +73,9 @@ class Parser:
 
         self.context_stack = [mode]
         self.ir = self.visit(ast_definition)
+
+        self.scope: dict[str, Variable] = {}
+        self.global_scope = func.__globals__
 
     @property
     def result(self):
@@ -136,6 +148,8 @@ class Parser:
 
     def visit_Expr(self, node: ast.Expr):
         return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
+
+    # TODO: for loop, with statement
 
     # ===== expressions =====
     def visit_Constant(self, node: ast.Constant):
@@ -217,11 +231,64 @@ class Parser:
         return Condition(self.location(node), body.type, condition, body, orelse)
 
     def visit_Name(self, node: ast.Name):
-        return self.resolve_name(node.id, node.ctx, [])
+        id = node.id
+        if id in self.scope:
+            variable = self.scope[id]
+            return Identifier(self.location(node), variable.type, context(node.ctx), variable)
+        elif id in self.global_scope:
+            global_value = self.global_scope[id]
+            vtype = {int: Integer(0), float: Floating(0),
+                     bool: Boolean()}
+            if type(global_value) not in vtype:
+                self.syntax_error(
+                    node, f"Incompatible global value '{id}' of type '{type(global_value)}'")
+            return Constant(self.location(node), vtype[type(global_value)], global_value)
+        else:
+            self.syntax_error(node, f"Undefined identifier '{id}'")
+
+    def visit_Attribute(self, node: ast.Attribute):
+        name_chain = [node.attr]
+        body = node.value
+        ctx = context(node.ctx)
+
+        while True:
+            if isinstance(body, ast.Name):
+                name_chain.append(body.id)
+                body = None
+                break
+            elif isinstance(body, ast.Attribute):
+                name_chain.append(body.attr)
+                body = body.value
+            elif isinstance(body, ast.Subscript):
+                break
+
+            else:
+                self.syntax_error(
+                    node, f"Unsupported Python syntax '{body.__class__.__name__}'")
+
+        name_chain.reverse()
+
+        # type check function
+        def typecheck(root_type: BaseType, name_chain: list[str]):
+            return root_type
+
+        if body is None:
+            # TODO: resolve chained name
+            pass
+        else:
+            subscript = cast(Terminal, self.visit(body))
+            return Access(self.location(node), typecheck(subscript.type, name_chain), ctx, subscript, name_chain)
 
     def visit_Subscript(self, node: ast.Subscript):
-        if self.context not in ("kernel", "critical"):
-            self.syntax_error(
-                node, f"Incompatible subscript under context '{self.context}'")
+        body = cast(Expression, self.visit(node.value))
 
-        critical = self.context == "kernel-critical"
+        if isinstance(body.type, Grid):
+            if self.context not in ("kernel", "critical"):
+                self.syntax_error(
+                    node, f"Incompatible subscript under context '{self.context}'")
+
+            critical = self.context == "critical"
+            self.syntax_error(node, "TODO")
+        else:
+            self.syntax_error(
+                node, f"Incompatible subscript to type '{body.type}'")

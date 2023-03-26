@@ -5,6 +5,7 @@ from typing import Literal
 from xgrid.lang.ir import IR, Variable
 from xgrid.util.console import ElementFormat, const, plain
 from xgrid.util.typing import BaseType
+from xgrid.util.typing.reference import Grid
 
 
 @dataclass
@@ -90,10 +91,42 @@ class Constant(Expression):
 
 
 @dataclass
-class Identifier(Expression):
-    variable: Variable
-    attributes: list[str]
+class Target(Expression):
     context: Literal["load", "store"]
+
+
+@dataclass
+class Terminal(Target):
+    pass
+
+
+@dataclass
+class Identifier(Terminal):
+    variable: Variable
 
     def write(self, format: ElementFormat):
         format.print(self.variable)
+
+
+@dataclass
+class Stencil(Terminal):
+    variable: Variable
+    time_offset: int
+    space_offset: list[int]
+
+    def __post_init__(self):
+        assert isinstance(self.variable.type, Grid)
+
+    def write(self, format: ElementFormat):
+        offset = f"[{', '.join(map(str, self.space_offset))}][{self.time_offset}]"
+        format.print(self.variable, plain(offset))
+
+
+@dataclass
+class Access(Target):
+    value: Terminal
+    attributes: list[str]
+
+    def write(self, format: ElementFormat):
+        attributes = f".{'.'.join(self.attributes)}"
+        format.print(self.value, plain(attributes))
