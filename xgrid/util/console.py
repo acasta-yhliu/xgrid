@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Iterable, TextIO
+from typing import TextIO
 import sys
 
 

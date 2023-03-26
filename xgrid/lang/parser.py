@@ -52,6 +52,7 @@ def context(ctx: ast.expr_context):
 class Parser:
     def __init__(self, func, mode: str) -> None:
         self.logger = Logger(self)
+        self.mode = mode
 
         # extract source related information
         file = inspect.getsourcefile(func)
@@ -115,7 +116,7 @@ class Parser:
         # extract annotation
 
         # extract body
-        return Definition(self.location(node), self.func_name, self.visits(node.body))
+        return Definition(self.location(node), self.func_name, self.mode, self.visits(node.body))
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):

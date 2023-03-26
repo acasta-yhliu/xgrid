@@ -1,6 +1,7 @@
 import sys
 import shutil
 from xgrid.util.logging import Logger
+from xgrid.lang import kernel
 
 
 logger = Logger("xgrid")
@@ -21,3 +22,6 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"]) -> None:
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
     logger.info(f"initialized with parallel = {parallel}, cc = {cc}")
+
+
+__all__ = ["kernel"]

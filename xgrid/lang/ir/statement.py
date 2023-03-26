@@ -14,10 +14,11 @@ class Statement(IR):
 @dataclass
 class Definition(Statement):
     name: str
+    mode: str
     body: list[Statement]
 
     def write(self, format: ElementFormat):
-        format.println(kw("operator"), plain(self.name), kw("begin"))
+        format.println(kw(self.mode), plain(self.name), kw("begin"))
         with format.indent():
             format.print(*self.body)
         format.println(kw("end"))

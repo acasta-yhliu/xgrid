@@ -2,3 +2,4 @@
 [ ] Code generator
 [ ] Dynamic link library ffi helper (ctypes wrapper) 
     Serialize for structure, pointer and array
+[ ] Fixed and default width of number literal

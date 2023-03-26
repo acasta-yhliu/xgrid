@@ -35,9 +35,6 @@ class Number(Value):
     def width_bits(self) -> int:
         return self.width_bytes * 8
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.width_bits})"
-
 
 @dataclass
 class Integer(Number):
@@ -55,6 +52,9 @@ class Integer(Number):
     def serialize(self, value):
         return self._ctype(value)
 
+    def __repr__(self) -> str:
+        return f"Integer({self.width_bits})"
+
 
 @dataclass
 class Floating(Number):
@@ -70,6 +70,9 @@ class Floating(Number):
 
     def serialize(self, value):
         return self._ctype(value)
+    
+    def __repr__(self) -> str:
+        return f"Floating({self.width_bits})"
 
 
 @dataclass
