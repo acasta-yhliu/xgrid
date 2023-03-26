@@ -3,7 +3,7 @@ from functools import reduce
 import inspect
 from itertools import chain
 import textwrap
-from typing import cast
+from typing import Iterable, NoReturn, cast
 from xgrid.lang.ir import Definition, Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Break, Continue, Evaluation, If, Return, While
@@ -85,7 +85,7 @@ class Parser:
     def context(self):
         return self.context_stack[-1]
 
-    def syntax_error(self, node: ast.AST, message: str):
+    def syntax_error(self, node: ast.AST, message: str) -> NoReturn:
         self.logger.dead(
             f"File {self.file}, line {node.lineno - 1}, in {self.func_name}",
             f"  Syntax error: {message}")
@@ -147,6 +147,9 @@ class Parser:
         return While(self.location(node), condition, body, orelse)
 
     def visit_Expr(self, node: ast.Expr):
+        # TODO: handle raw string
+        if self.context == "c" and isinstance(node.value, ast.Constant):
+            pass
         return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
 
     # TODO: for loop, with statement
@@ -230,65 +233,65 @@ class Parser:
                 node, f"Incompatible type '{body.type}' and '{orelse.type}' of if expression")
         return Condition(self.location(node), body.type, condition, body, orelse)
 
-    def visit_Name(self, node: ast.Name):
-        id = node.id
-        if id in self.scope:
-            variable = self.scope[id]
-            return Identifier(self.location(node), variable.type, context(node.ctx), variable)
-        elif id in self.global_scope:
-            global_value = self.global_scope[id]
-            vtype = {int: Integer(0), float: Floating(0),
-                     bool: Boolean()}
-            if type(global_value) not in vtype:
-                self.syntax_error(
-                    node, f"Incompatible global value '{id}' of type '{type(global_value)}'")
-            return Constant(self.location(node), vtype[type(global_value)], global_value)
+    def resolve_chained(self, node: ast.Name | ast.Subscript, names: Iterable[str]):
+        ctx = context(node.ctx)
+
+        def typecheck(root_type: BaseType, name_chain: Iterable[str]):
+            # TODO: type check structure access
+            return root_type
+
+        if isinstance(node, ast.Subscript):
+            root = cast(Terminal, self.visit(node))
         else:
-            self.syntax_error(node, f"Undefined identifier '{id}'")
+            try:
+                variable = self.scope[node.id]
+                root = Identifier(self.location(
+                    node), variable.type, ctx, variable)
+            except KeyError:
+                # TODO: resolve to global constant
+                return
+
+        return Access(self.location(node), typecheck(root.type, names), ctx, root, list(names))
+
+    def visit_Name(self, node: ast.Name):
+        return self.resolve_chained(node, [])
 
     def visit_Attribute(self, node: ast.Attribute):
         name_chain = [node.attr]
         body = node.value
-        ctx = context(node.ctx)
 
         while True:
-            if isinstance(body, ast.Name):
-                name_chain.append(body.id)
-                body = None
+            if isinstance(body, ast.Name) or isinstance(body, ast.Subscript):
                 break
             elif isinstance(body, ast.Attribute):
                 name_chain.append(body.attr)
                 body = body.value
-            elif isinstance(body, ast.Subscript):
-                break
-
             else:
                 self.syntax_error(
                     node, f"Unsupported Python syntax '{body.__class__.__name__}'")
 
-        name_chain.reverse()
-
-        # type check function
-        def typecheck(root_type: BaseType, name_chain: list[str]):
-            return root_type
-
-        if body is None:
-            # TODO: resolve chained name
-            pass
-        else:
-            subscript = cast(Terminal, self.visit(body))
-            return Access(self.location(node), typecheck(subscript.type, name_chain), ctx, subscript, name_chain)
+        return self.resolve_chained(body, reversed(name_chain))
 
     def visit_Subscript(self, node: ast.Subscript):
-        body = cast(Expression, self.visit(node.value))
-
-        if isinstance(body.type, Grid):
-            if self.context not in ("kernel", "critical"):
-                self.syntax_error(
-                    node, f"Incompatible subscript under context '{self.context}'")
-
-            critical = self.context == "critical"
-            self.syntax_error(node, "TODO")
-        else:
+        # make sure the context is correct
+        if self.context not in ("kernel", "critical"):
             self.syntax_error(
-                node, f"Incompatible subscript to type '{body.type}'")
+                node, f"Incompatible subscript under context '{self.context}'")
+
+        def extract_space_subscript(subscript: ast.Subscript, time_offset: int, is_critical: bool):
+            if not isinstance(subscript.value, ast.Name):
+                self.syntax_error(
+                    node, f"Incompatible subscript to '{node.value.__class__.__name__}' under context '{self.context}'")
+
+            grid_id = subscript.value.id
+            if grid_id not in self.scope or not isinstance(self.scope[grid_id].type, Grid):
+                self.syntax_error(
+                    node, f"Incompatible subscript to undefined grid '{grid_id}'")
+
+            ctx = context(subscript.ctx)
+            variable = self.scope[grid_id]
+
+            if is_critical:
+                return
+            else:
+                return
