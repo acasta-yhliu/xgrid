@@ -3,7 +3,7 @@ import os
 import shutil
 import time
 from typing import Callable
-from xgrid import kernel
+from xgrid import kernel, init
 from xgrid.util.console import Console, ElementFormat
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
@@ -121,17 +121,19 @@ def ffi_library() -> None:
 
 TEMP = 10
 
+init()
 
 @test.fact("lang.Operator")
 def operator() -> None:
     @kernel
     def add(a: int, b: int) -> int:
-        return 1 + 2 + 5 > 4
+        if 1 > 2:
+            return 1 + 2 + 5 > 4
+        else:
+            return 3
 
     test.log(f"built {add.mode} {add.name} successfully, ir is shown below:")
     add.print_ir()
-
-# xgrid.init()
 
 
 test.run()

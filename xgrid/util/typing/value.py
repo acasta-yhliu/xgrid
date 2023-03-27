@@ -8,11 +8,6 @@ class Value(BaseType):
     pass
 
 
-@dataclass
-class Void(Value):
-    def __repr__(self) -> str:
-        return "Void"
-
 
 @dataclass
 class Boolean(Value):
@@ -41,8 +36,8 @@ class Integer(Number):
     __concrete_typing__ = True
 
     def __post_init__(self):
-        assert self.width_bytes in (0, 1, 2, 4, 8)
-        self._ctype = {0: ctypes.c_int32, 1: ctypes.c_int8, 2: ctypes.c_int16,
+        assert self.width_bytes in (1, 2, 4, 8)
+        self._ctype = {1: ctypes.c_int8, 2: ctypes.c_int16,
                        4: ctypes.c_int32, 8: ctypes.c_int64}[self.width_bytes]
 
     @property
@@ -61,7 +56,7 @@ class Floating(Number):
     __concrete_typing__ = True
 
     def __post_init__(self):
-        assert self.width_bytes in (0, 4, 8)
+        assert self.width_bytes in (4, 8)
         self._ctype = ctypes.c_float if self.width_bytes == 4 else ctypes.c_double
 
     @property
@@ -70,7 +65,7 @@ class Floating(Number):
 
     def serialize(self, value):
         return self._ctype(value)
-    
+
     def __repr__(self) -> str:
         return f"Floating({self.width_bits})"
 

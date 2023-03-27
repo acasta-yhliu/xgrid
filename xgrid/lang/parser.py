@@ -3,6 +3,8 @@ from functools import reduce
 import inspect
 import textwrap
 from typing import Iterable, NoReturn, cast
+from struct import calcsize
+
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, While
@@ -113,10 +115,13 @@ class Parser:
         return Location(self.file, self.func_name, node.lineno - 1)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        # extract annotation
+        # TODO: extract annotation
 
         # extract body
-        return Definition(self.location(node), self.func_name, self.mode, self.visits(node.body))
+        return Definition(self.location(node),
+                          name=self.func_name,
+                          mode=self.mode,
+                          body=self.visits(node.body))
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):
@@ -167,7 +172,7 @@ class Parser:
 
     # ===== expressions =====
     def parse_constant(self, node: ast.AST, constant):
-        vtype = {int: Integer(0), float: Floating(0),
+        vtype = {int: Integer(calcsize("i")), float: Floating(calcsize("f")),
                  bool: Boolean()}
         if type(constant) not in vtype:
             self.syntax_error(
@@ -333,3 +338,5 @@ class Parser:
                 return
             else:
                 return
+
+    # function call !!!
