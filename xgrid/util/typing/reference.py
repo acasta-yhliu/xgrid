@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from itertools import repeat
+import ctypes
 
 from xgrid.util.typing import BaseType
 from xgrid.util.typing.value import Value
@@ -14,15 +14,18 @@ class Reference(BaseType):
 class Pointer(Reference):
     element: Value
 
+    def __post_init__(self):
+        self._ctype = ctypes.POINTER(self.element.ctype)  # type: ignore
+
     @property
     def ctype(self):
-        return super().ctype
+        return self._ctype
 
     def serialize(self, value):
-        return super().serialize(value)
+        return self._ctype(value)
 
     def deserialize(self, value):
-        return super().deserialize(value)
+        return self.element.deserialize(value.contents)
 
     def __repr__(self) -> str:
         return f"Pointer of {repr(self.element)}"

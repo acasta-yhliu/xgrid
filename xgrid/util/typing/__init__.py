@@ -1,5 +1,6 @@
-from dataclasses import dataclass, is_dataclass
-from typing import Type, cast, get_origin, get_args
+from dataclasses import dataclass, is_dataclass, fields
+from typing import get_origin, get_args
+import ctypes
 
 import xgrid.util.typing.annotation as annot
 import xgrid.util.typing.value as val
@@ -12,7 +13,7 @@ class BaseType:
 
     @property
     def ctype(self):
-        pass
+        ...
 
     def serialize(self, value):
         pass
@@ -67,7 +68,13 @@ def parse_annotation(annotation) -> BaseType | None:
         if org == annot.Grid and len(arg) == 2 and type(arg[1]) == int:
             return ref.Grid(val_type, arg[1])
 
-    if is_dataclass(annotation):
-        pass
+    if is_dataclass(annotation) and isinstance(annotation, type):
+        elements = []
+        for field in fields(annotation):
+            t = parse_annotation(field.type)
+            if not isinstance(t, val.Value):
+                return None
+            elements.append((field.name, t))
+        return val.Structure(annotation, annotation.__name__, tuple(elements))
 
     return None

@@ -6,8 +6,7 @@ from subprocess import PIPE, Popen
 from typing import IO, Callable, Iterable, cast
 
 from xgrid.util.logging import Logger
-from xgrid.util.typing import BaseType
-from xgrid.util.typing.value import Void
+from xgrid.util.typing import BaseType, Void
 
 
 class Library:

@@ -1,12 +1,11 @@
 import ctypes
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
 from xgrid.util.typing import BaseType
 
 
 @dataclass
 class Value(BaseType):
     pass
-
 
 
 @dataclass
@@ -80,17 +79,18 @@ class Structure(Value):
 
     def __post_init__(self):
         self.elements_map = dict(self.elements)
+        self._ctype = type(f"__ctypes_{self.name}",
+                           (ctypes.Structure,), {"_fields_": [(x[0], x[1].ctype) for x in self.elements]})
 
     @property
     def ctype(self):
-        return super().ctype
+        return self._ctype
 
     def serialize(self, value):
-        # TODO: Implement serialize and deserialize for structure type
-        return super().serialize(value)
+        return self._ctype(*astuple(value))
 
     def deserialize(self, value):
-        return super().deserialize(value)
+        return self.dataclass() # TODO
 
     def __repr__(self) -> str:
         return self.name
