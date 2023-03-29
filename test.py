@@ -138,7 +138,7 @@ def external_max(a: int, b: int) -> int:
 @test.fact("lang.Operator")
 def operator() -> None:
     @xgrid.kernel()
-    def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f) -> int:
+    def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f, e: xgrid.grid[int, 4]) -> int:
         external_max(a, b)
         if d.x > d.y:
             return 1 + 2 + 5

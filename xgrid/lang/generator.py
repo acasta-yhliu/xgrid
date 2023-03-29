@@ -7,7 +7,8 @@ from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.init import get_config
 from xgrid.util.typing import BaseType
-from xgrid.util.typing.reference import Pointer
+from xgrid.util.typing.reference import Grid, Pointer
+from xgrid.util.typing.value import Boolean, Floating, Integer, Structure
 
 
 class Generator:
@@ -16,17 +17,21 @@ class Generator:
         assert self.operator.mode == "kernel"
 
         self.logger = Logger(self)
+        self.config = get_config()
 
         self.definitions = LineFormat()
         self.logger.info("Insert necessary and predefined headers")
-        headers = ["stdio.h", "stdlib.h", "stdint.h"]
+        headers = ["stdio.h", "stdlib.h", "stdint.h", "stdbool.h"]
+        if self.config.parallel:
+            headers.append("omp.h")
+
         for header in headers:
             self.definitions.println(f"#include <{header}>")
+        for header in operator.includes:
+            self.definitions.println(f"#include \"{header}\"")
         self.definitions.println("")
 
         self.implementations: dict[str, LineFormat] = {}
-
-        self.config = get_config()
 
         self.define_operator(operator)
 
@@ -38,9 +43,42 @@ class Generator:
     def source(self):
         return repr(self.definitions) + "\n" + "\n".join(map(repr, self.implementations.values()))
 
-    def format_type(self, t: BaseType):
-        # TODO
-        pass
+    def format_type(self, t: BaseType, abbr: bool = False):
+        if isinstance(t, Boolean):
+            return "b" if abbr else "bool"
+        elif isinstance(t, Integer):
+            return f"i{t.width_bits}" if abbr else f"int{t.width_bits}_t"
+        elif isinstance(t, Floating):
+            fullname = {32: "float", 64: "double"}[t.width_bits]
+            return fullname[0] if abbr else fullname
+        elif isinstance(t, Structure):
+            self.define_type(t, t.name)
+            return f"st{t.name}" if abbr else f"struct {t.name}"
+
+        # reference type does not have abbr
+        elif isinstance(t, Pointer):
+            return f"{self.format_type(t.element)}*"
+        elif isinstance(t, Grid):
+            name = f"__Grid{t.dimension}d_{self.format_type(t.element, True)}"
+            self.define_type(t, name)
+            return f"struct {name}"
+
+    def define_type(self, t: BaseType, name: str):
+        if name in self.implementations:
+            return
+
+        self.definitions.println(f"struct {name};")
+        implementation = LineFormat()
+        self.implementations[name] = implementation
+        implementation.println(f"struct {name} {{")
+
+        if isinstance(t, Structure):
+            with implementation.indent():
+                for name, type in t.elements:
+                    implementation.println(f"{self.format_type(type)} {name};")
+            implementation.println("};")
+        elif isinstance(t, Grid):
+            implementation.println("};")
 
     def define_operator(self, operator: Operator):
         if operator.name in self.implementations:
