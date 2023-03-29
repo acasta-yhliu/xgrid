@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from xgrid.lang.ir import IR, Variable
-from xgrid.lang.ir.expression import Expression
+from xgrid.lang.ir.expression import Expression, Terminal
 from xgrid.util.console import ElementFormat, idfunc, idtype, idvar, kw, plain
 from xgrid.util.typing import BaseType
 
@@ -47,8 +47,6 @@ class Definition(Statement):
         with format.indent():
             format.print(*self.body)
         format.println(kw("end"))
-
-
 
 
 @dataclass
@@ -116,12 +114,12 @@ class Evaluation(Statement):
 
 @dataclass
 class Assignment(Statement):
-    variable: Variable
+    terminal: Terminal
     value: Expression
 
     def write(self, format: ElementFormat):
-        format.println(self.variable, plain(":"), idtype(
-            repr(self.variable.type)), plain("="), self.value)
+        format.println(self.terminal, plain(":"), idtype(
+            repr(self.terminal.type)), plain("="), self.value)
 
 
 @dataclass

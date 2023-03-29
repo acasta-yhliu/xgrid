@@ -6,6 +6,7 @@ from xgrid.util.console import LineFormat
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.init import get_config
+from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Pointer
 
 
@@ -14,16 +15,20 @@ class Generator:
         self.operator = operator
         assert self.operator.mode == "kernel"
 
-        self.ir = operator.ir
-
         self.logger = Logger(self)
 
-        self.predefine_code = LineFormat()
-        self.code = LineFormat()
+        self.definitions = LineFormat()
+        self.logger.info("Insert necessary and predefined headers")
+        headers = ["stdio.h", "stdlib.h", "stdint.h"]
+        for header in headers:
+            self.definitions.println(f"#include <{header}>")
+        self.definitions.println("")
+
+        self.implementations: dict[str, LineFormat] = {}
 
         self.config = get_config()
 
-        self.generate()
+        self.define_operator(operator)
 
     @property
     def native(self):
@@ -31,100 +36,116 @@ class Generator:
 
     @property
     def source(self):
-        return repr(self.code)
+        return repr(self.definitions) + "\n" + "\n".join(map(repr, self.implementations.values()))
 
-    def generate(self):
-        self.argtypes = [x[1] for x in self.ir.signature.arguments]
-        self.rettype = self.ir.signature.return_type
+    def format_type(self, t: BaseType):
+        # TODO
+        pass
 
-        definition = f"{self.format_type()} {self.operator.name}()"
+    def define_operator(self, operator: Operator):
+        if operator.name in self.implementations:
+            return
 
-        self.predefine_code.println(definition + ";")
+        opir = operator.ir
+        implementation = LineFormat()
+        self.implementations[operator.name] = implementation
 
-        self.code.println(definition + " {")
-        with self.code.indent():
-            self.visits(self.ir.body)
-        self.code.println("}")
+        arguments = ', '.join(
+            map(lambda x: f"{self.format_type(x[1])} {x[0]}", opir.signature.arguments))
+        definition = f"{self.format_type(opir.signature.return_type)} {operator.name}({arguments})"
+
+        implementation.println(definition + "{")
+        self.definitions.println(definition + ";")
+
+        with implementation.indent():
+            self.visits(operator.ir.body, implementation)
+        implementation.println("}")
 
     def compile(self):
         self.logger.info(
             f"Compiling kernel {self.operator.name}' and retrive interface")
-        # TODO: include predefine code
         dynlib = Compiler(cacheroot=self.config.cacheroot, cc=self.config.cc).compile(
-            repr(self.code), self.config.cflags)
-        return Library(dynlib).function(self.operator.name, self.argtypes, self.rettype)
+            self.source, self.config.cflags)
 
-    def visit(self, node: ir.IR):
+        argtypes = [x[1] for x in self.operator.ir.signature.arguments]
+        rettype = self.operator.ir.signature.return_type
+
+        return Library(dynlib).function(self.operator.name, argtypes, rettype)
+
+    def visit(self, node: ir.IR, implementation: LineFormat):
         node_class = node.__class__.__name__
         method = getattr(self, "visit_" + node_class)
-        return method(node)
+        return method(node, implementation)
 
-    def visits(self, l: list[stat.Statement]):
+    def visits(self, l: list[stat.Statement], implementation: LineFormat):
         for item in l:
-            self.visit(item)
+            self.visit(item, implementation)
 
-    def visit_Return(self, ir: stat.Return):
+    def visit_Return(self, ir: stat.Return, implementation: LineFormat):
         if ir.value is None:
-            self.code.println(f"return;")
+            implementation.println(f"return;")
         else:
-            self.code.println(f"return {self.visit(ir.value)};")
+            implementation.println(
+                f"return {self.visit(ir.value, implementation)};")
 
-    def visit_Break(self, ir: stat.Break):
-        self.code.println("break;")
+    def visit_Break(self, ir: stat.Break, implementation: LineFormat):
+        implementation.println("break;")
 
-    def visit_Continue(self, ir: stat.Continue):
-        self.code.println("continue;")
+    def visit_Continue(self, ir: stat.Continue, implementation: LineFormat):
+        implementation.println("continue;")
 
-    def visit_If(self, ir: stat.If):
-        self.code.println(f"if ({self.visit(ir.condition)}) {{")
-        with self.code.indent():
-            self.visits(ir.body)
+    def visit_If(self, ir: stat.If, implementation: LineFormat):
+        implementation.println(
+            f"if ({self.visit(ir.condition, implementation)}) {{")
+        with implementation.indent():
+            self.visits(ir.body, implementation)
         if any(ir.orelse):
-            self.code.println("} else {")
-            with self.code.indent():
-                self.visits(ir.orelse)
-        self.code.println("}")
+            implementation.println("} else {")
+            with implementation.indent():
+                self.visits(ir.orelse, implementation)
+        implementation.println("}")
 
-    def visit_While(self, ir: stat.While):
-        self.code.println(f"while ({self.visit(ir.condition)}) {{")
-        with self.code.indent():
-            self.visits(ir.body)
-        self.code.println("}")
+    def visit_While(self, ir: stat.While, implementation: LineFormat):
+        implementation.println(
+            f"while ({self.visit(ir.condition, implementation)}) {{")
+        with implementation.indent():
+            self.visits(ir.body, implementation)
+        implementation.println("}")
 
-    def visit_Evaluation(self, ir: stat.Evaluation):
-        self.code.println(f"{self.visit(ir.value)};")
+    def visit_Evaluation(self, ir: stat.Evaluation, implementation: LineFormat):
+        implementation.println(f"{self.visit(ir.value, implementation)};")
 
-    def visit_Assignment(self, ir: stat.Assignment):
-        # TODO
-        pass
+    def visit_Assignment(self, ir: stat.Assignment, implementation: LineFormat):
+        implementation.println(
+            f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
 
-    def visit_Inline(self, ir: stat.Inline):
-        self.code.println(ir.source)
+    def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
+        implementation.println(ir.source)
 
     # ===== expression =====
-    def visit_Binary(self, ir: expr.Binary):
+    def visit_Binary(self, ir: expr.Binary, implementation: LineFormat):
         # TODO: handle case of is, nis, pow
-        return f"({self.visit(ir.left)} {ir.operator.value} {self.visit(ir.right)})"
+        return f"({self.visit(ir.left, implementation)} {ir.operator.value} {self.visit(ir.right, implementation)})"
 
-    def visit_Unary(self, ir: expr.Unary):
-        return f"({ir.operator.value} {self.visit(ir.right)})"
+    def visit_Unary(self, ir: expr.Unary, implementation: LineFormat):
+        return f"({ir.operator.value} {self.visit(ir.right, implementation)})"
 
-    def visit_Condition(self, ir: expr.Condition):
-        return f"({self.visit(ir.condition)} ? {self.visit(ir.body)} : {self.visit(ir.orelse)})"
+    def visit_Condition(self, ir: expr.Condition, implementation: LineFormat):
+        return f"({self.visit(ir.condition, implementation)} ? {self.visit(ir.body, implementation)} : {self.visit(ir.orelse, implementation)})"
 
-    def visit_Constant(self, ir: expr.Constant):
+    def visit_Constant(self, ir: expr.Constant, implementation: LineFormat):
         return repr(ir.value).lower()
 
-    def visit_Identifier(self, ir: expr.Identifier):
+    def visit_Identifier(self, ir: expr.Identifier, implementation: LineFormat):
         if isinstance(ir.variable.type, Pointer):
             return f"(*{ir.variable.name})"
         else:
             return ir.variable.name
 
-    def visit_Access(self, ir: expr.Access):
-        return f"({self.visit(ir.value)}).{ir.attribute}"
+    def visit_Access(self, ir: expr.Access, implementation: LineFormat):
+        return f"({self.visit(ir.value, implementation)}).{ir.attribute}"
 
-    def visit_Call(self, ir: expr.Call):
-        return f"{ir.operator.name}({', '.join(map(self.visit, ir.arguments))})"
+    def visit_Call(self, ir: expr.Call, implementation: LineFormat):
+        return f"{ir.operator.name}({', '.join(map(lambda x: self.visit(x, implementation), ir.arguments))})"
 
     # TODO: handle stencil
