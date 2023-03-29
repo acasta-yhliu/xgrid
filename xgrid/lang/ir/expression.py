@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Literal
 
 from xgrid.lang.ir import IR, Variable
-from xgrid.util.console import ElementFormat, const, plain
+from xgrid.util.console import ElementFormat, const, kw, plain
 from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Grid
 
@@ -91,13 +91,8 @@ class Constant(Expression):
 
 
 @dataclass
-class Target(Expression):
+class Terminal(Expression):
     context: Literal["load", "store"]
-
-
-@dataclass
-class Terminal(Target):
-    pass
 
 
 @dataclass
@@ -111,22 +106,25 @@ class Identifier(Terminal):
 @dataclass
 class Stencil(Terminal):
     variable: Variable
+    critical: bool
     time_offset: int
-    space_offset: list[int]
+    space_offset: list[int] | list[Expression]
 
     def __post_init__(self):
         assert isinstance(self.variable.type, Grid)
 
     def write(self, format: ElementFormat):
         offset = f"[{', '.join(map(str, self.space_offset))}][{self.time_offset}]"
-        format.print(self.variable, plain(offset))
+        if self.critical:
+            format.print(kw("stencil"), self.variable, plain(offset))
+        else:
+            format.print(self.variable, plain(offset))
 
 
 @dataclass
-class Access(Target):
+class Access(Terminal):
     value: Terminal
-    attributes: list[str]
+    attribute: str
 
     def write(self, format: ElementFormat):
-        attributes = f".{'.'.join(self.attributes)}"
-        format.print(self.value, plain(attributes))
+        format.print(self.value, plain(f".{self.attribute}"))

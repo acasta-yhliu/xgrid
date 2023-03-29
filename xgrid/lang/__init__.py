@@ -40,3 +40,11 @@ def kernel(func):
 
 def function(func):
     return Operator(func, "function")
+
+
+def c():
+    ...
+
+
+def critical():
+    ...

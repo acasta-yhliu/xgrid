@@ -2,11 +2,11 @@ import ast
 from functools import reduce
 import inspect
 import textwrap
-from typing import Iterable, NoReturn, cast
+from typing import NoReturn, cast
 from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
-from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Terminal, Unary, UnaryOperator
+from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, While
 
 from xgrid.util.logging import Logger
@@ -168,7 +168,7 @@ class Parser:
         for withitem in node.items:
             withitem.context_expr
 
-    # TODO: for loop, with statement, assign statement
+    # TODO: for loop, assign statement
 
     # ===== expressions =====
     def parse_constant(self, node: ast.AST, constant):
@@ -253,12 +253,23 @@ class Parser:
                 node, f"Incompatible type '{body.type}' and '{orelse.type}' of if expression")
         return Condition(self.location(node), body.type, condition, body, orelse)
 
-    def resolve_global(self, node: ast.AST, root_name: str, names: Iterable[str]):
-        if root_name not in self.global_scope:
-            self.syntax_error(node, f"Undefined identifier '{root_name}'")
-        resolved_names = [root_name]
+    def resolve_global(self, node: ast.AST):
+        names = []
+        while True:
+            if isinstance(node, ast.Name):
+                names.append(node.id)
+                break
+            elif isinstance(node, ast.Attribute):
+                names.append(node.attr)
+                node = node.value
+            else:
+                self.syntax_error(
+                    node, f"Python syntax '{node.__class__.__name__}' is currently unsupported")
 
-        scope = self.global_scope[root_name]
+        names.reverse()
+
+        scope = self.global_scope
+        resolved_names = []
         for attr in names:
             try:
                 scope = scope[attr] if isinstance(
@@ -270,73 +281,100 @@ class Parser:
 
         return scope
 
-    def resolve_Attribute(self, node: ast.Name | ast.Subscript, names: Iterable[str]):
-        ctx = context(node.ctx)
+    def resolve_local(self, node: ast.AST, create_type: Value | None = None, create_name: str = "") -> Terminal | None:
+        location = self.location(node)
 
-        # extract the root
         if isinstance(node, ast.Subscript):
-            root = cast(Terminal, self.visit(node))
-        else:
+            def extract_space(grid: ast.Subscript, time_offset: int):
+                if not isinstance(grid.value, ast.Name) or self.context not in ("kernel", "critical"):
+                    self.syntax_error(
+                        grid, f"Incompatible subscript to '{grid.value.__class__.__name__}' under context '{self.context}'")
+
+                if grid.value.id not in self.scope:
+                    self.syntax_error(
+                        grid, f"Undefined identifier '{grid.value.id}'")
+
+                grid_var = self.scope[grid.value.id]
+                if not isinstance(grid_var.type, Grid):
+                    self.syntax_error(
+                        grid, f"Incompatible subscript to type '{grid_var.type}'")
+
+                location = self.location(grid)
+                ctx = context(grid.ctx)
+
+                if isinstance(grid.slice, ast.Tuple):
+                    space_slices = grid.slice.elts
+                else:
+                    space_slices = [grid.slice]
+
+                critical = self.context == "critical"
+                spaces = []
+                for space_slice in space_slices:
+                    if critical:
+                        space_index = cast(Expression, self.visit(space_slice))
+                        if not isinstance(space_index.type, Integer):
+                            self.syntax_error(
+                                grid, f"Incompatible subscript type '{space_index.type}'")
+                        spaces.append(space_index)
+                    else:
+                        if not isinstance(space_slice, ast.Constant) or type(space_slice.value) != int:
+                            self.syntax_error(
+                                grid, f"Incompatible subscript '{space_slice}'")
+                        spaces.append(space_slice.value)
+
+                return Stencil(location, grid_var.type.element, ctx, grid_var, critical, time_offset, spaces)
+
+            if isinstance(node.value, ast.Subscript):
+                time_slice = node.slice
+                if not isinstance(time_slice, ast.Constant) or type(time_slice.value) != int:
+                    self.syntax_error(
+                        node.value, f"Invalid time dimension subscript to '{node.value.__class__.__name__}")
+                time_offset = time_slice.value
+            else:
+                time_offset = 0
+
+            return extract_space(node, time_offset)
+
+        elif isinstance(node, ast.Attribute):
+            value = self.resolve_local(node.value)
+
+            if value is None or not isinstance(value.type, Structure) or node.attr not in value.type.elements_map:
+                return None
+            else:
+                return Access(location, value.type.elements_map[node.attr], context(node.ctx), value, node.attr)
+
+        elif isinstance(node, ast.Name):
             try:
                 variable = self.scope[node.id]
-                root = Identifier(self.location(
-                    node), variable.type, ctx, variable)
+                return Identifier(self.location(node), variable.type, context(node.ctx), variable)
             except KeyError:
-                # if not found in local, then try global
-                return self.parse_constant(node, self.resolve_global(node, node.id, names))
+                if create_type is not None:
+                    variable = Variable(create_name, create_type)
+                    self.scope[node.id] = variable
+                    return Identifier(self.location(node), create_type, context(node.ctx), variable)
+                else:
+                    return None
 
-        # type check to structure attribute
-        root_type = root.type
-        for name in names:
-            if not isinstance(root_type, Structure) or name not in root_type.elements_map:
-                self.syntax_error(
-                    node, f"Incompatible attribute '{name}' of type '{root_type}'")
-            root_type = root_type.elements_map[name]
-
-        return Access(self.location(node), root_type, ctx, root, list(names))
+        else:
+            self.syntax_error(
+                node, f"Python syntax '{node.__class__.__name__}' is currently unsupported")
 
     def visit_Name(self, node: ast.Name):
-        return self.resolve_Attribute(node, [])
+        local = self.resolve_local(node)
+        return self.resolve_global(node) if local is None else local
 
     def visit_Attribute(self, node: ast.Attribute):
-        name_chain = [node.attr]
-        body = node.value
-
-        while True:
-            if isinstance(body, ast.Name) or isinstance(body, ast.Subscript):
-                break
-            elif isinstance(body, ast.Attribute):
-                name_chain.append(body.attr)
-                body = body.value
-            else:
-                self.syntax_error(
-                    node, f"Unsupported Python syntax '{body.__class__.__name__}'")
-
-        return self.resolve_Attribute(body, reversed(name_chain))
+        local = self.resolve_local(node)
+        return self.resolve_global(node) if local is None else local
 
     def visit_Subscript(self, node: ast.Subscript):
-        # make sure the context is correct
-        if self.context not in ("kernel", "critical"):
-            self.syntax_error(
-                node, f"Incompatible subscript under context '{self.context}'")
+        return self.resolve_local(node)
 
-        # TODO
-        def extract_space_subscript(subscript: ast.Subscript, time_offset: int, is_critical: bool):
-            if not isinstance(subscript.value, ast.Name):
-                self.syntax_error(
-                    node, f"Incompatible subscript to '{node.value.__class__.__name__}' under context '{self.context}'")
+    def visit_Call(self, node: ast.Call):
+        if isinstance(node.func, ast.Attribute):
+            local_obj = self.resolve_local(node.func.value)
+            if local_obj is not None:
+                # TODO: method call to local object
+                pass
 
-            grid_id = subscript.value.id
-            if grid_id not in self.scope or not isinstance(self.scope[grid_id].type, Grid):
-                self.syntax_error(
-                    node, f"Incompatible subscript to undefined grid '{grid_id}'")
-
-            ctx = context(subscript.ctx)
-            variable = self.scope[grid_id]
-
-            if is_critical:
-                return
-            else:
-                return
-
-    # function call !!!
+        global_function = self.resolve_global(node.func)
