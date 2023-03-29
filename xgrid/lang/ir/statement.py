@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 from xgrid.lang.ir import IR, Variable
 from xgrid.lang.ir.expression import Expression
-from xgrid.util.console import ElementFormat, idtype, kw, plain
+from xgrid.util.console import ElementFormat, idfunc, idtype, idvar, kw, plain
+from xgrid.util.typing import BaseType
 
 
 @dataclass
@@ -12,13 +13,37 @@ class Statement(IR):
 
 
 @dataclass
+class Signature:
+    arguments: list[tuple[str, BaseType]]
+    return_type: BaseType
+
+    def __post_init__(self):
+        self.argnames_map = dict(self.arguments)
+
+
+@dataclass
 class Definition(Statement):
     name: str
     mode: str
+    signature: Signature
+    scope: dict[str, Variable]
     body: list[Statement]
 
     def write(self, format: ElementFormat):
-        format.println(kw(self.mode), plain(self.name), kw("begin"))
+        args = [plain("(")]
+        for name, type in self.signature.arguments:
+            args.extend((idtype(repr(type)), idvar("%"+name)))
+            args.append(plain(","))
+        if any(args):
+            args.pop()
+        args.append(plain(")"))
+        format.println(kw(self.mode), idtype(repr(self.signature.return_type)), idfunc(
+            self.name), *args, kw("requires"))
+        with format.indent():
+            for name, var in self.scope.items():
+                if name not in self.signature.argnames_map:
+                    format.println(var, plain(":"), idtype(repr(var.type)))
+        format.println(kw("begin"))
         with format.indent():
             format.print(*self.body)
         format.println(kw("end"))
@@ -103,5 +128,6 @@ class Inline(Statement):
 
     def write(self, format: ElementFormat):
         format.println(kw("inline"), kw("begin"))
-        format.print(plain(self.source))
+        with format.indent():
+            format.println(plain(self.source))
         format.println(kw("end"))

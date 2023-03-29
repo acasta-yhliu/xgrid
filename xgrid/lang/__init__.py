@@ -42,9 +42,21 @@ def function(func):
     return Operator(func, "function")
 
 
-def c():
+def extern(func):
+    return Operator(func, "extern")
+
+
+class StubContext:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, a, b, c):
+        pass
+
+
+def c() -> StubContext:
     ...
 
 
-def critical():
+def critical() -> StubContext:
     ...

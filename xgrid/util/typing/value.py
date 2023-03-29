@@ -90,7 +90,7 @@ class Structure(Value):
         return self._ctype(*astuple(value))
 
     def deserialize(self, value):
-        return self.dataclass() # TODO
+        return self.dataclass(*[getattr(value, attr_tuple[0]) for attr_tuple in self.elements])
 
     def __repr__(self) -> str:
         return self.name

@@ -59,7 +59,7 @@ class Element:
         self.foreground = foreground
 
     def stringify(self, isatty: bool):
-        if isatty:
+        if isatty and (self.style or self.foreground):
             style_str = self.style.value if self.style else ""
             foreground_str = self.foreground.value if self.foreground else ""
             return f"\033[{style_str};{foreground_str}m" + self.text + "\033[0m"
@@ -125,8 +125,8 @@ def kw(text: str):
     return Element(text, None, Foreground.blue)
 
 
-def const(text: str):
-    return Element(text, Style.italic, None)
+def idconst(text: str):
+    return Element(text, None, None)
 
 
 def idvar(text: str):

@@ -7,10 +7,12 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, While
+from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
-from xgrid.util.typing.reference import Grid
+from xgrid.util.typing import BaseType, Void
+from xgrid.util.typing.annotation import parse_annotation
+from xgrid.util.typing.reference import Grid, Pointer, Reference
 from xgrid.util.typing.value import Boolean, Floating, Integer, Number, Structure, Value
 
 
@@ -55,6 +57,7 @@ class Parser:
     def __init__(self, func, mode: str) -> None:
         self.logger = Logger(self)
         self.mode = mode
+        self.func = func
 
         # extract source related information
         file = inspect.getsourcefile(func)
@@ -75,6 +78,7 @@ class Parser:
         self.context_stack = [mode]
 
         self.scope: dict[str, Variable] = {}
+        self.args: list[tuple[str, BaseType]] = []
         self.global_scope = func.__globals__
 
         self.ir = self.visit(ast_definition)
@@ -116,12 +120,41 @@ class Parser:
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         # TODO: extract annotation
+        sig = inspect.signature(self.func)
+        for arg_name, arg_param in sig.parameters.items():
+            assert arg_name == arg_param.name
+
+            if arg_param.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                self.syntax_error(node,
+                                  f"Argument '{arg_name}' of kind '{arg_param.kind}' is not supported")
+
+            if arg_param.annotation == inspect.Parameter.empty:
+                self.syntax_error(node,
+                                  f"Argument '{arg_name}' requires type annotation")
+
+            arg_type = parse_annotation(arg_param.annotation)
+            if arg_type is None or isinstance(arg_type, Void):
+                self.syntax_error(node,
+                                  f"Argument '{arg_name}' requires non-void type annotation")
+
+            self.scope[arg_name] = Variable(arg_name, arg_type)
+            self.args.append((arg_name, arg_type))
+
+        ret_sig = parse_annotation(sig.return_annotation)
+        if ret_sig is None or isinstance(ret_sig, Reference):
+            self.syntax_error(node, f"Invalid return type '{ret_sig}'")
+        self.return_type = ret_sig
 
         # extract body
-        return Definition(self.location(node),
-                          name=self.func_name,
-                          mode=self.mode,
-                          body=self.visits(node.body))
+        if self.mode == "extern":
+            return ...
+        else:
+            return Definition(self.location(node),
+                              name=self.func_name,
+                              mode=self.mode,
+                              signature=Signature(self.args, self.return_type),
+                              scope=self.scope,
+                              body=self.visits(node.body))
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):
@@ -165,8 +198,26 @@ class Parser:
             return Evaluation(self.location(node), cast(Expression, self.visit(node.value)))
 
     def visit_With(self, node: ast.With):
-        for withitem in node.items:
-            withitem.context_expr
+        if len(node.items) != 1:
+            self.syntax_error(node, "Only one pragma switch at once")
+
+        withitem = node.items[0]
+
+        if not isinstance(withitem.context_expr, ast.Call):
+            self.syntax_error(
+                node, f"Invalid pragma switch '{withitem.context_expr}'")
+        global_obj = self.resolve_global(withitem.context_expr.func)
+        import xgrid.lang as lang
+        if global_obj == lang.c:
+            self.context_stack.append("c")
+        elif global_obj == lang.critical:
+            self.context_stack.append("critical")
+        else:
+            self.syntax_error(node, f"Unknown pragma switch '{global_obj}'")
+
+        body = self.visits(node.body)
+        self.context_stack.pop()
+        return body
 
     # TODO: for loop, assign statement
 
@@ -346,7 +397,8 @@ class Parser:
         elif isinstance(node, ast.Name):
             try:
                 variable = self.scope[node.id]
-                return Identifier(self.location(node), variable.type, context(node.ctx), variable)
+                t = variable.type.element if isinstance(variable.type, Pointer) else variable.type
+                return Identifier(self.location(node), t, context(node.ctx), variable)
             except KeyError:
                 if create_type is not None:
                     variable = Variable(create_name, create_type)
@@ -361,11 +413,11 @@ class Parser:
 
     def visit_Name(self, node: ast.Name):
         local = self.resolve_local(node)
-        return self.resolve_global(node) if local is None else local
+        return self.parse_constant(node, self.resolve_global(node)) if local is None else local
 
     def visit_Attribute(self, node: ast.Attribute):
         local = self.resolve_local(node)
-        return self.resolve_global(node) if local is None else local
+        return self.parse_constant(node, self.resolve_global(node)) if local is None else local
 
     def visit_Subscript(self, node: ast.Subscript):
         return self.resolve_local(node)

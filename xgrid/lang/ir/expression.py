@@ -3,9 +3,9 @@ from enum import Enum
 from typing import Literal
 
 from xgrid.lang.ir import IR, Variable
-from xgrid.util.console import ElementFormat, const, kw, plain
+from xgrid.util.console import ElementFormat, idconst, kw, plain
 from xgrid.util.typing import BaseType
-from xgrid.util.typing.reference import Grid
+from xgrid.util.typing.reference import Grid, Pointer
 
 
 @dataclass
@@ -87,7 +87,7 @@ class Constant(Expression):
     value: int | float | bool
 
     def write(self, format: ElementFormat):
-        format.print(const(repr(self.value)))
+        format.print(idconst(repr(self.value)))
 
 
 @dataclass
@@ -100,6 +100,8 @@ class Identifier(Terminal):
     variable: Variable
 
     def write(self, format: ElementFormat):
+        if isinstance(self.variable.type, Pointer):
+            format.print(kw("ref"))
         format.print(self.variable)
 
 

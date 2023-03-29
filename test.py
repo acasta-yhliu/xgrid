@@ -1,10 +1,11 @@
+from dataclasses import dataclass
 from io import StringIO
 import os
 import shutil
 import time
-from typing import Callable
-from xgrid import kernel, init
-from xgrid.util.console import Console, ElementFormat
+from typing import Callable, no_type_check
+import xgrid
+from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.typing.value import Floating
@@ -121,16 +122,26 @@ def ffi_library() -> None:
 
 TEMP = 10
 
-init()
+xgrid.init()
+
+
+@dataclass
+class Vector3f:
+    x: float
+    y: float
+    z: float
+
 
 @test.fact("lang.Operator")
 def operator() -> None:
-    @kernel
-    def add(a: int, b: int) -> int:
-        if 1 > 2:
+    @xgrid.kernel
+    def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f) -> int:
+        with xgrid.c():
+            """printf("Hello World\\n");"""
+        if d.x > d.y:
             return 1 + 2 + 5 > 4
         else:
-            return 3
+            return a + b + c
 
     test.log(f"built {add.mode} {add.name} successfully, ir is shown below:")
     add.print_ir()
