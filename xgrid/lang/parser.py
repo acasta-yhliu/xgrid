@@ -6,7 +6,7 @@ from typing import NoReturn, cast
 from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
-from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Condition, Constant, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
+from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Condition, Constant, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
@@ -54,16 +54,15 @@ def context(ctx: ast.expr_context):
 
 
 class Parser:
-    def __init__(self, func, mode: str) -> None:
+    def __init__(self, func, name: str, mode: str) -> None:
         self.logger = Logger(self)
         self.mode = mode
         self.func = func
+        self.name = name
 
         # extract source related information
         file = inspect.getsourcefile(func)
         self.file = "<unknown>" if file is None else file
-
-        self.func_name = func.__name__
 
         # extract source code of function
         lines, lineno = inspect.getsourcelines(func)
@@ -93,7 +92,7 @@ class Parser:
 
     def syntax_error(self, node: ast.AST, message: str) -> NoReturn:
         self.logger.dead(
-            f"File {self.file}, line {node.lineno - 1}, in {self.func_name}",
+            f"File {self.file}, line {node.lineno - 1}, in {self.name}",
             f"  Syntax error: {message}")
 
     def visit(self, node: ast.AST):
@@ -116,10 +115,9 @@ class Parser:
         return result
 
     def location(self, node: ast.AST):
-        return Location(self.file, self.func_name, node.lineno - 1)
+        return Location(self.file, self.name, node.lineno - 1)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        # TODO: extract annotation
         sig = inspect.signature(self.func)
         for arg_name, arg_param in sig.parameters.items():
             assert arg_name == arg_param.name
@@ -145,20 +143,21 @@ class Parser:
             self.syntax_error(node, f"Invalid return type '{ret_sig}'")
         self.return_type = ret_sig
 
-        # extract body
-        if self.mode == "extern":
-            return ...
-        else:
-            return Definition(self.location(node),
-                              name=self.func_name,
-                              mode=self.mode,
-                              signature=Signature(self.args, self.return_type),
-                              scope=self.scope,
-                              body=self.visits(node.body))
+        return Definition(self.location(node),
+                          name=self.name,
+                          mode=self.mode,
+                          signature=Signature(self.args, self.return_type),
+                          scope=self.scope,
+                          body=[] if self.mode == "external" else self.visits(node.body))
 
     # ===== statements =====
     def visit_Return(self, node: ast.Return):
-        return Return(self.location(node), None if node.value is None else self.visit(node.value))
+        return_value = None if node.value is None else self.visit(node.value)
+        if return_value is not None:
+            if return_value.type != self.return_type:
+                self.syntax_error(
+                    node, f"Incompatible return type '{return_value.type}' with '{self.return_type}'")
+        return Return(self.location(node), return_value)
 
     def visit_Pass(self, node: ast.Pass):
         return []
@@ -320,7 +319,7 @@ class Parser:
         names.reverse()
 
         scope = self.global_scope
-        resolved_names = []
+        resolved_names = ["globals"]
         for attr in names:
             try:
                 scope = scope[attr] if isinstance(
@@ -397,7 +396,8 @@ class Parser:
         elif isinstance(node, ast.Name):
             try:
                 variable = self.scope[node.id]
-                t = variable.type.element if isinstance(variable.type, Pointer) else variable.type
+                t = variable.type.element if isinstance(
+                    variable.type, Pointer) else variable.type
                 return Identifier(self.location(node), t, context(node.ctx), variable)
             except KeyError:
                 if create_type is not None:
@@ -430,3 +430,9 @@ class Parser:
                 pass
 
         global_function = self.resolve_global(node.func)
+        from xgrid.lang.operator import Operator
+        if not isinstance(global_function, Operator):
+            self.syntax_error(
+                node, f"Invalid call to object '{global_function.__name__}', it is not an operator")
+
+        return Call(self.location(node), global_function.ir.signature.return_type, global_function, [self.visit(i) for i in node.args])

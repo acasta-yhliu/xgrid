@@ -3,7 +3,7 @@ from io import StringIO
 import os
 import shutil
 import time
-from typing import Callable, no_type_check
+from typing import Callable
 import xgrid
 from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
@@ -131,15 +131,17 @@ class Vector3f:
     y: float
     z: float
 
+@xgrid.external(name="max")
+def external_max(a: int, b: int) -> int:
+    ...
 
 @test.fact("lang.Operator")
 def operator() -> None:
-    @xgrid.kernel
+    @xgrid.kernel()
     def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f) -> int:
-        with xgrid.c():
-            """printf("Hello World\\n");"""
+        external_max(a, b)
         if d.x > d.y:
-            return 1 + 2 + 5 > 4
+            return 1 + 2 + 5
         else:
             return a + b + c
 

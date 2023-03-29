@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
 
+import xgrid.lang.operator as op
 from xgrid.lang.ir import IR, Variable
-from xgrid.util.console import ElementFormat, idconst, kw, plain
+from xgrid.util.console import ElementFormat, idconst, idfunc, kw, plain
 from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Grid, Pointer
 
@@ -130,3 +131,19 @@ class Access(Terminal):
 
     def write(self, format: ElementFormat):
         format.print(self.value, plain(f".{self.attribute}"))
+
+
+@dataclass
+class Call(Expression):
+    operator: "op.Operator"
+    arguments: list[Expression]
+
+    def write(self, format: ElementFormat):
+        arglist = []
+        for arg in self.arguments:
+            arglist.append(arg)
+            arglist.append(plain(","))
+        if any(arglist):
+            arglist.pop()
+        format.print(idfunc(self.operator.name), plain(
+            "("), *arglist, plain(")"))
