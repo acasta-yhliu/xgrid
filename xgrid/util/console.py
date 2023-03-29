@@ -143,3 +143,32 @@ def idfunc(text: str):
 
 def plain(text: str):
     return Element(text)
+
+
+class LineFormat:
+    class IndentationGuard:
+        def __init__(self, format: "LineFormat") -> None:
+            self.format = format
+
+        def __enter__(self) -> None:
+            self.format.indents += self.format.indent_size
+
+        def __exit__(self, _a, _b, _c) -> None:
+            self.format.indents -= self.format.indent_size
+
+    def __init__(self, indent_size: int = 2) -> None:
+        self.indents = 0
+        self.indent_size = indent_size
+        self.lines: list[str] = []
+
+    def indent(self) -> "LineFormat.IndentationGuard":
+        return LineFormat.IndentationGuard(self)
+
+    def println(self, text: str):
+        self.lines.append(" " * self.indents + text + "\n")
+
+    def write(self, device: TextIO = sys.stdout):
+        device.writelines(self.lines)
+
+    def __repr__(self) -> str:
+        return ''.join(self.lines)

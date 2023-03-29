@@ -181,12 +181,15 @@ class Parser:
     def visit_While(self, node: ast.While):
         condition = cast(Expression, self.visit(node.test))
 
-        self.context_stack.append("if")
+        self.context_stack.append("while")
         body = self.visits(node.body)
-        orelse = self.visits(node.orelse)
+        # orelse = self.visits(node.orelse)
+        if any(node.orelse):
+            self.syntax_error(
+                node, f"While statement does not support else clause")
         self.context_stack.pop()
 
-        return While(self.location(node), condition, body, orelse)
+        return While(self.location(node), condition, body)  # , orelse)
 
     def visit_Expr(self, node: ast.Expr):
         if self.context == "c":

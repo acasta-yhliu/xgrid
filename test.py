@@ -122,8 +122,6 @@ def ffi_library() -> None:
 
 TEMP = 10
 
-xgrid.init()
-
 
 @dataclass
 class Vector3f:
@@ -131,9 +129,11 @@ class Vector3f:
     y: float
     z: float
 
+
 @xgrid.external(name="max")
 def external_max(a: int, b: int) -> int:
     ...
+
 
 @test.fact("lang.Operator")
 def operator() -> None:
@@ -147,6 +147,8 @@ def operator() -> None:
 
     test.log(f"built {add.mode} {add.name} successfully, ir is shown below:")
     add.print_ir()
+    print(add.source)
 
 
+xgrid.init()
 test.run()

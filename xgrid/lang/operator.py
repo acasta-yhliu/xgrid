@@ -19,7 +19,11 @@ class Operator:
 
     def __call__(self, *args: Any) -> Any:
         if self.mode == "kernel":
-            self.logger.dead("todo")
+            if self.native is None:
+                from xgrid.lang.generator import Generator
+                self.native = Generator(self).native
+            else:
+                self.native(*args)
         else:
             self.logger.dead(
                 f"Invalid call to non-kernel ({self.mode}) operator '{self.name}'")
@@ -30,6 +34,11 @@ class Operator:
         if _ir is None:
             self._ir = Parser(self.func, self.name, self.mode).result
         return self._ir
+
+    @property
+    def source(self) -> str:
+        from xgrid.lang.generator import Generator
+        return Generator(self).source
 
     def print_ir(self, *, indent: int = 2, device: TextIO = sys.stdout):
         formatter = ElementFormat(indent)

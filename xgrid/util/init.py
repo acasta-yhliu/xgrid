@@ -11,9 +11,19 @@ logger = Logger("xgrid")
 class Configuration:
     parallel: bool
     cc: list[str]
+    cacheroot: str
 
     def __repr__(self) -> str:
         return repr(asdict(self))
+
+    @property
+    def cflags(self):
+        flags = []
+
+        if self.parallel:
+            flags.append("-fopenmp")
+
+        return flags
 
 
 _config: Configuration | None = None
@@ -25,7 +35,9 @@ def get_config() -> Configuration:
     return _config
 
 
-def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"]) -> None:
+def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid") -> None:
+    global _config
+
     if sys.version_info < (3, 10):
         logger.fail(
             f"Minimum Python 3.10 is required, current version is {sys.version_info}")
@@ -39,6 +51,6 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"]) -> None:
             logger.fail(
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
-    _config = Configuration(parallel, cc)
+    _config = Configuration(parallel, cc, cacheroot)
 
     logger.info(f"initialized with configuration: {_config}")

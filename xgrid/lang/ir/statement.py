@@ -93,16 +93,16 @@ class If(Statement):
 class While(Statement):
     condition: Expression
     body: list[Statement]
-    orelse: list[Statement]
+    # orelse: list[Statement]
 
     def write(self, format: ElementFormat):
         format.println(kw("while"), self.condition, kw("do"))
         with format.indent():
             format.print(*self.body)
-        if any(self.orelse):
-            format.println(kw("else"))
-            with format.indent():
-                format.print(*self.orelse)
+        # if any(self.orelse):
+        #     format.println(kw("else"))
+        #     with format.indent():
+        #         format.print(*self.orelse)
         format.println(kw("end"))
 
 
