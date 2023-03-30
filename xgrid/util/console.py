@@ -164,8 +164,11 @@ class LineFormat:
     def indent(self) -> "LineFormat.IndentationGuard":
         return LineFormat.IndentationGuard(self)
 
-    def println(self, text: str):
-        self.lines.append(" " * self.indents + text + "\n")
+    def println(self, text: str, *, indent: bool = True):
+        if indent:
+            self.lines.append(" " * self.indents + text + "\n")
+        else:
+            self.lines.append(text + "\n")
 
     def write(self, device: TextIO = sys.stdout):
         device.writelines(self.lines)

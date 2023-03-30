@@ -139,7 +139,7 @@ def external_max(a: int, b: int) -> int:
 def operator() -> None:
     @xgrid.kernel()
     def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f, e: xgrid.grid[int, 4]) -> int:
-        external_max(a, b)
+        external_max(a, e[1, 2, 3])
         if d.x > d.y:
             return 1 + 2 + 5
         else:
@@ -147,8 +147,9 @@ def operator() -> None:
 
     test.log(f"built {add.mode} {add.name} successfully, ir is shown below:")
     add.print_ir()
+    test.log(f"generated following c source code:")
     print(add.source)
 
 
-xgrid.init()
+xgrid.init(comment=True)
 test.run()

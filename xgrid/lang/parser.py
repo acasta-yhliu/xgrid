@@ -375,6 +375,10 @@ class Parser:
                                 grid, f"Incompatible subscript '{space_slice}'")
                         spaces.append(space_slice.value)
 
+                if len(spaces) != grid_var.type.dimension:
+                    self.syntax_error(
+                        grid, f"Incompatible subscript length '{len(spaces)}' with dimension {grid_var.type.dimension}")
+
                 return Stencil(location, grid_var.type.element, ctx, grid_var, critical, time_offset, spaces)
 
             if isinstance(node.value, ast.Subscript):
@@ -434,6 +438,10 @@ class Parser:
 
         global_function = self.resolve_global(node.func)
         from xgrid.lang.operator import Operator
+        if global_function == cast:
+            # TODO: handle cast operator
+            return Cast()
+
         if not isinstance(global_function, Operator):
             self.syntax_error(
                 node, f"Invalid call to object '{global_function.__name__}', it is not an operator")

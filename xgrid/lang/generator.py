@@ -1,3 +1,4 @@
+from io import StringIO
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
 import xgrid.lang.ir.expression as expr
@@ -27,9 +28,9 @@ class Generator:
 
         for header in headers:
             self.definitions.println(f"#include <{header}>")
+
         for header in operator.includes:
             self.definitions.println(f"#include \"{header}\"")
-        self.definitions.println("")
 
         self.implementations: dict[str, LineFormat] = {}
 
@@ -41,7 +42,11 @@ class Generator:
 
     @property
     def source(self):
-        return repr(self.definitions) + "\n" + "\n".join(map(repr, self.implementations.values()))
+        with StringIO() as io:
+            self.definitions.write(io)
+            for implementation in self.implementations.values():
+                implementation.write(io)
+            return io.getvalue()
 
     def format_type(self, t: BaseType, abbr: bool = False):
         if isinstance(t, Boolean):
@@ -78,6 +83,11 @@ class Generator:
                     implementation.println(f"{self.format_type(type)} {name};")
             implementation.println("};")
         elif isinstance(t, Grid):
+            with implementation.indent():
+                implementation.println("int32_t time_idx, time_ttl;")
+                implementation.println(f"int32_t shape[{t.dimension}];")
+                implementation.println(
+                    f"{self.format_type(t.element)}** data;")
             implementation.println("};")
 
     def define_operator(self, operator: Operator):
@@ -113,6 +123,9 @@ class Generator:
     def visit(self, node: ir.IR, implementation: LineFormat):
         node_class = node.__class__.__name__
         method = getattr(self, "visit_" + node_class)
+        if self.config.comment and isinstance(node, stat.Statement):
+            implementation.println(
+                f"#line {node.location.line} \"{node.location.file}\"", indent=False)
         return method(node, implementation)
 
     def visits(self, l: list[stat.Statement], implementation: LineFormat):
@@ -186,4 +199,6 @@ class Generator:
     def visit_Call(self, ir: expr.Call, implementation: LineFormat):
         return f"{ir.operator.name}({', '.join(map(lambda x: self.visit(x, implementation), ir.arguments))})"
 
+    def visit_Stencil(self, ir: expr.Stencil, implementation: LineFormat):
+        return "<stencil>"
     # TODO: handle stencil
