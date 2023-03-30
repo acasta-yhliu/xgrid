@@ -22,7 +22,7 @@ class Generator:
 
         self.definitions = LineFormat()
         self.logger.info("Insert necessary and predefined headers")
-        headers = ["stdio.h", "stdlib.h", "stdint.h", "stdbool.h"]
+        headers = ["stdio.h", "stdlib.h", "stdint.h", "stdbool.h", "math.h"]
         if self.config.parallel:
             headers.append("omp.h")
 
@@ -32,7 +32,8 @@ class Generator:
         for header in operator.includes:
             self.definitions.println(f"#include \"{header}\"")
 
-        self.implementations: dict[str, LineFormat] = {}
+        self.op_impls: dict[str, LineFormat] = {}
+        self.t_impls: dict[str, LineFormat] = {}
 
         self.define_operator(operator)
 
@@ -44,8 +45,11 @@ class Generator:
     def source(self):
         with StringIO() as io:
             self.definitions.write(io)
-            for implementation in self.implementations.values():
-                implementation.write(io)
+            for impls in self.t_impls.values():
+                impls.write(io)
+
+            for impls in self.op_impls.values():
+                impls.write(io)
             return io.getvalue()
 
     def format_type(self, t: BaseType, abbr: bool = False):
@@ -69,12 +73,12 @@ class Generator:
             return f"struct {name}"
 
     def define_type(self, t: BaseType, name: str):
-        if name in self.implementations:
+        if name in self.t_impls:
             return
 
         self.definitions.println(f"struct {name};")
         implementation = LineFormat()
-        self.implementations[name] = implementation
+        self.t_impls[name] = implementation
         implementation.println(f"struct {name} {{")
 
         if isinstance(t, Structure):
@@ -91,19 +95,23 @@ class Generator:
             implementation.println("};")
 
     def define_operator(self, operator: Operator):
-        if operator.name in self.implementations:
+        if operator.name in self.op_impls:
             return
 
         opir = operator.ir
         implementation = LineFormat()
-        self.implementations[operator.name] = implementation
+        self.op_impls[operator.name] = implementation
 
         arguments = ', '.join(
             map(lambda x: f"{self.format_type(x[1])} {x[0]}", opir.signature.arguments))
         definition = f"{self.format_type(opir.signature.return_type)} {operator.name}({arguments})"
+        self.definitions.println(
+            ("extern " if operator.mode == "external" else "") + definition + ";")
+
+        if operator.mode == "external":
+            return
 
         implementation.println(definition + "{")
-        self.definitions.println(definition + ";")
 
         with implementation.indent():
             self.visits(operator.ir.body, implementation)
@@ -175,8 +183,14 @@ class Generator:
 
     # ===== expression =====
     def visit_Binary(self, ir: expr.Binary, implementation: LineFormat):
-        # TODO: handle case of is, nis, pow
-        return f"({self.visit(ir.left, implementation)} {ir.operator.value} {self.visit(ir.right, implementation)})"
+        if ir.operator == expr.BinaryOperator.Pow:
+            if isinstance(ir.type, Floating) and ir.type.width_bits == 64:
+                pow_func = "pow"
+            else:
+                pow_func = "powf"
+            return f"{pow_func}({self.visit(ir.left, implementation)}, {self.visit(ir.right, implementation)})"
+        else:
+            return f"({self.visit(ir.left, implementation)} {ir.operator.value} {self.visit(ir.right, implementation)})"
 
     def visit_Unary(self, ir: expr.Unary, implementation: LineFormat):
         return f"({ir.operator.value} {self.visit(ir.right, implementation)})"
@@ -197,6 +211,7 @@ class Generator:
         return f"({self.visit(ir.value, implementation)}).{ir.attribute}"
 
     def visit_Call(self, ir: expr.Call, implementation: LineFormat):
+        self.define_operator(ir.operator)
         return f"{ir.operator.name}({', '.join(map(lambda x: self.visit(x, implementation), ir.arguments))})"
 
     def visit_Stencil(self, ir: expr.Stencil, implementation: LineFormat):

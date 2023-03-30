@@ -16,14 +16,16 @@ class Operator:
 
         self.name = func.__name__ if name is None else name
         self.includes = [] if includes is None else includes
+        
+        self.native = None
 
     def __call__(self, *args: Any) -> Any:
         if self.mode == "kernel":
             if self.native is None:
                 from xgrid.lang.generator import Generator
                 self.native = Generator(self).native
-            else:
-                self.native(*args)
+            
+            return self.native(*args)
         else:
             self.logger.dead(
                 f"Invalid call to non-kernel ({self.mode}) operator '{self.name}'")

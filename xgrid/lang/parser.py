@@ -27,13 +27,10 @@ class OperatorMap:
         ast.Add: BinaryOperator.Add,
         ast.Sub: BinaryOperator.Sub,
         ast.Mult: BinaryOperator.Mul,
-        # ast.MatMult: BinaryOperator.Mat,
         ast.Div: BinaryOperator.Div,
         ast.Pow: BinaryOperator.Pow,
         ast.Mod: BinaryOperator.Mod,
 
-        ast.Is: BinaryOperator.Is,
-        ast.IsNot: BinaryOperator.Nis,
         ast.Eq: BinaryOperator.Eq,
         ast.NotEq: BinaryOperator.Neq,
         ast.Gt: BinaryOperator.Gt,
@@ -262,7 +259,13 @@ class Parser:
             self.syntax_error(
                 node, f"Incompatible binary operator '{binary_op.value}' with type '{left.type}' and '{right.type}'")
 
-        return Binary(self.location(node), left.type, left, right, binary_op)
+        if binary_op == BinaryOperator.Pow:
+            return_type = Floating(64) if isinstance(
+                left.type, Floating) and left.type.width_bits == 64 else Floating(32)
+        else:
+            return_type = left.type
+
+        return Binary(self.location(node), return_type, left, right, binary_op)
 
     def visit_BoolOp(self, node: ast.BoolOp):
         location = self.location(node)
@@ -441,6 +444,8 @@ class Parser:
         if global_function == cast:
             # TODO: handle cast operator
             return Cast()
+
+        # TODO: handle constructor
 
         if not isinstance(global_function, Operator):
             self.syntax_error(

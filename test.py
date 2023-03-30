@@ -130,25 +130,31 @@ class Vector3f:
     z: float
 
 
-@xgrid.external(name="max")
-def external_max(a: int, b: int) -> int:
-    ...
+@xgrid.function()
+def implemented_max(a: int, b: int) -> int:
+    return a if a > b else b
 
 
 @test.fact("lang.Operator")
 def operator() -> None:
     @xgrid.kernel()
-    def add(a: int, b: int, c: xgrid.ptr[int], d: Vector3f, e: xgrid.grid[int, 4]) -> int:
-        external_max(a, e[1, 2, 3])
-        if d.x > d.y:
-            return 1 + 2 + 5
-        else:
-            return a + b + c
+    def kernel_test(a: int, b: int, d: Vector3f) -> Vector3f:
+        # external_max(a, b)
+        with xgrid.c():
+            r"""printf("Hello from inline c code, value of d is (%f, %f, %f)\n", d.x, d.y, d.z);"""
+        return d
+        # return implemented_max(a, b)
 
-    test.log(f"built {add.mode} {add.name} successfully, ir is shown below:")
-    add.print_ir()
+    test.log(
+        f"built {kernel_test.mode} {kernel_test.name} successfully, ir is shown below:")
+    kernel_test.print_ir()
     test.log(f"generated following c source code:")
-    print(add.source)
+    print(kernel_test.source)
+
+    test.log(f"run the following function and you should see the result")
+    vector = Vector3f(1.3, 4.5, 6.7)
+    print(kernel_test(1, 2, vector))
+    print(kernel_test(2, 3, vector))
 
 
 xgrid.init(comment=True)

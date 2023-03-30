@@ -24,10 +24,7 @@ class BinaryOperator(Enum):
     Div = "/"
     Pow = "^"
     Mod = "%"
-    # Mat = "@"
 
-    Is = "==="
-    Nis = "!=="
     Eq = "=="
     Gt = ">"
     Ge = ">="
@@ -39,7 +36,7 @@ class BinaryOperator(Enum):
     Or = "||"
 
     def is_compare(self) -> bool:
-        return self in (BinaryOperator.Is, BinaryOperator.Nis, BinaryOperator.Eq, BinaryOperator.Gt, BinaryOperator.Ge, BinaryOperator.Lt, BinaryOperator.Le, BinaryOperator.Neq)
+        return self in (BinaryOperator.Eq, BinaryOperator.Gt, BinaryOperator.Ge, BinaryOperator.Lt, BinaryOperator.Le, BinaryOperator.Neq)
 
     def is_logic(self) -> bool:
         return self in (BinaryOperator.And, BinaryOperator.Or)
