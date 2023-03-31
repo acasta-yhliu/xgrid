@@ -3,7 +3,7 @@ from io import StringIO
 import os
 import shutil
 import time
-from typing import Callable
+from typing import Callable, cast
 import xgrid
 from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
@@ -142,7 +142,7 @@ def operator() -> None:
         # external_max(a, b)
         with xgrid.c():
             r"""printf("Hello from inline c code, value of d is (%f, %f, %f)\n", d.x, d.y, d.z);"""
-        return d
+        return Vector3f(cast(float, implemented_max(3, 5)), 3.14, 3.14)
         # return implemented_max(a, b)
 
     test.log(

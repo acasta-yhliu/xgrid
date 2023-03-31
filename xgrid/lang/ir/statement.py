@@ -1,24 +1,14 @@
 from dataclasses import dataclass
 
 from xgrid.lang.ir import IR, Variable
-from xgrid.lang.ir.expression import Expression, Terminal
+from xgrid.lang.ir.expression import Expression, Signature, Terminal
 from xgrid.util.console import ElementFormat, idfunc, idtype, idvar, kw, plain
-from xgrid.util.typing import BaseType
 
 
 @dataclass
 class Statement(IR):
     def write(self, format: ElementFormat):
         pass
-
-
-@dataclass
-class Signature:
-    arguments: list[tuple[str, BaseType]]
-    return_type: BaseType
-
-    def __post_init__(self):
-        self.argnames_map = dict(self.arguments)
 
 
 @dataclass
@@ -97,10 +87,6 @@ class While(Statement):
         format.println(kw("while"), self.condition, kw("do"))
         with format.indent():
             format.print(*self.body)
-        # if any(self.orelse):
-        #     format.println(kw("else"))
-        #     with format.indent():
-        #         format.print(*self.orelse)
         format.println(kw("end"))
 
 

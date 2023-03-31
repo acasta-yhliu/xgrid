@@ -211,8 +211,16 @@ class Generator:
         return f"({self.visit(ir.value, implementation)}).{ir.attribute}"
 
     def visit_Call(self, ir: expr.Call, implementation: LineFormat):
-        self.define_operator(ir.operator)
-        return f"{ir.operator.name}({', '.join(map(lambda x: self.visit(x, implementation), ir.arguments))})"
+        args = ', '.join(map(lambda x: self.visit(
+            x, implementation), ir.arguments))
+        if isinstance(ir.operator, expr.Constructor):
+            return f"(({self.format_type(ir.operator.type)}) {{{args}}})"
+        else:
+            self.define_operator(ir.operator)
+            return f"{ir.operator.name}({args})"
+
+    def visit_Cast(self, ir: expr.Cast, implementation: LineFormat):
+        return f"(({self.format_type(ir.type)})({self.visit(ir.value, implementation)}))"
 
     def visit_Stencil(self, ir: expr.Stencil, implementation: LineFormat):
         return "<stencil>"

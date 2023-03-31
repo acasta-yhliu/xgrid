@@ -6,7 +6,7 @@ from typing import NoReturn, cast
 from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
-from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Condition, Constant, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
+from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
@@ -76,6 +76,7 @@ class Parser:
         self.scope: dict[str, Variable] = {}
         self.args: list[tuple[str, BaseType]] = []
         self.global_scope = func.__globals__
+        self.global_scope.update({"int": int, "float": float, "bool": bool})
 
         self.ir = self.visit(ast_definition)
 
@@ -433,22 +434,62 @@ class Parser:
         return self.resolve_local(node)
 
     def visit_Call(self, node: ast.Call):
-        if isinstance(node.func, ast.Attribute):
-            local_obj = self.resolve_local(node.func.value)
-            if local_obj is not None:
-                # TODO: method call to local object
-                pass
-
-        global_function = self.resolve_global(node.func)
         from xgrid.lang.operator import Operator
-        if global_function == cast:
-            # TODO: handle cast operator
-            return Cast()
 
-        # TODO: handle constructor
+        func_name = None
 
-        if not isinstance(global_function, Operator):
+        if isinstance(node.func, ast.Attribute) and (local_obj := self.resolve_local(node.func.value)) is not None:
+            if isinstance(local_obj.type, Structure):
+                func = getattr(
+                    local_obj.type.dataclass, node.func.attr, None)
+                func_name = f"{local_obj.type.dataclass.__qualname__}.{node.func.attr}"
+            else:
+                # TODO: fixed method call
+                self.syntax_error(node, "dead")
+
+            args: list[Expression] = [local_obj]
+        else:
+            func = self.resolve_global(node.func)
+            args = []
+
+        # specially handle cast expression
+        if func == cast:
+            if len(node.args) != 2:
+                self.syntax_error(
+                    node, f"Cast requires 2 arguments, got {len(node.args)}")
+            target_type = parse_annotation(self.resolve_global(node.args[0]))
+            if target_type is None:
+                self.syntax_error(node, f"Invalid cast type")
+            return Cast(self.location(node), target_type, self.visit(node.args[1]))
+
+        args.extend(self.visit(i) for i in node.args)
+
+        # specially handle type constructor
+        if isinstance(func, type):
+            internal_type = parse_annotation(func)
+            if internal_type is None or not isinstance(internal_type, Structure):
+                self.syntax_error(
+                    node, f"Invalid type constructor '{func.__name__}'")
+
+            func = Constructor(internal_type, Signature(
+                list(internal_type.elements), internal_type))
+            func_name = f"{internal_type.name}.constructor"
+
+        # type check the function and arguments
+        if not isinstance(func, Operator) and not isinstance(func, Constructor):
             self.syntax_error(
-                node, f"Invalid call to object '{global_function.__name__}', it is not an operator")
+                node, f"Invalid call to object '{func}', it is not an operator")
 
-        return Call(self.location(node), global_function.ir.signature.return_type, global_function, [self.visit(i) for i in node.args])
+        if func_name is None:
+            func_name = func.name  # type: ignore
+
+        if (expected := len(func.signature.arguments)) != len(args):
+            self.syntax_error(
+                node, f"Operator '{func_name}' requires {expected} arguments, but got {len(args)}")
+
+        for id, (arg_name, arg_type) in enumerate(func.signature.arguments):
+            if arg_type != args[id].type:
+                self.syntax_error(
+                    node, f"Incompatible type '{args[id].type}' with '{arg_type}' of argument '{arg_name}, operator '{func_name}'")
+
+        return Call(self.location(node), func.signature.return_type, func, args)

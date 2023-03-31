@@ -16,7 +16,7 @@ class Operator:
 
         self.name = func.__name__ if name is None else name
         self.includes = [] if includes is None else includes
-        
+
         self.native = None
 
     def __call__(self, *args: Any) -> Any:
@@ -24,7 +24,7 @@ class Operator:
             if self.native is None:
                 from xgrid.lang.generator import Generator
                 self.native = Generator(self).native
-            
+
             return self.native(*args)
         else:
             self.logger.dead(
@@ -41,6 +41,10 @@ class Operator:
     def source(self) -> str:
         from xgrid.lang.generator import Generator
         return Generator(self).source
+
+    @property
+    def signature(self):
+        return self.ir.signature
 
     def print_ir(self, *, indent: int = 2, device: TextIO = sys.stdout):
         formatter = ElementFormat(indent)

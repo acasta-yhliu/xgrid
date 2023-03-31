@@ -4,9 +4,10 @@ from typing import Literal
 
 import xgrid.lang.operator as op
 from xgrid.lang.ir import IR, Variable
-from xgrid.util.console import ElementFormat, idconst, idfunc, kw, plain
+from xgrid.util.console import ElementFormat, idconst, idfunc, idtype, kw, plain
 from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Grid, Pointer
+from xgrid.util.typing.value import Structure
 
 
 @dataclass
@@ -89,6 +90,14 @@ class Constant(Expression):
 
 
 @dataclass
+class Cast(Expression):
+    value: Expression
+
+    def write(self, format: ElementFormat):
+        format.print(self.value, plain("as"), idtype(repr(self.type)))
+
+
+@dataclass
 class Terminal(Expression):
     context: Literal["load", "store"]
 
@@ -131,8 +140,23 @@ class Access(Terminal):
 
 
 @dataclass
+class Signature:
+    arguments: list[tuple[str, BaseType]]
+    return_type: BaseType
+
+    def __post_init__(self):
+        self.argnames_map = dict(self.arguments)
+
+
+@dataclass
+class Constructor(ElementFormat):
+    type: Structure
+    signature: Signature
+
+
+@dataclass
 class Call(Expression):
-    operator: "op.Operator"
+    operator: "op.Operator | Constructor"
     arguments: list[Expression]
 
     def write(self, format: ElementFormat):
@@ -142,5 +166,10 @@ class Call(Expression):
             arglist.append(plain(","))
         if any(arglist):
             arglist.pop()
-        format.print(idfunc(self.operator.name), plain(
-            "("), *arglist, plain(")"))
+
+        if isinstance(self.operator, Constructor):
+            format.print(idtype(repr(self.operator.type)), plain(
+                "("), *arglist, plain(")"))
+        else:
+            format.print(idfunc(self.operator.name), plain(
+                "("), *arglist, plain(")"))

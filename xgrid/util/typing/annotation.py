@@ -18,7 +18,7 @@ class Annotation:
 
 
 class ptr(Annotation, Generic[Value]):
-    pass
+    def addr(self) -> int: ...
 
 
 class grid(Annotation, Generic[Value, Length]):
