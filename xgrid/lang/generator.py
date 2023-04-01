@@ -114,6 +114,11 @@ class Generator:
         implementation.println(definition + "{")
 
         with implementation.indent():
+            for name, var in operator.ir.scope.items():
+                if name not in operator.signature.argnames_map:
+                    implementation.println(
+                        f"{self.format_type(var.type)} {name};")
+
             self.visits(operator.ir.body, implementation)
         implementation.println("}")
 
@@ -211,8 +216,15 @@ class Generator:
         return f"({self.visit(ir.value, implementation)}).{ir.attribute}"
 
     def visit_Call(self, ir: expr.Call, implementation: LineFormat):
-        args = ', '.join(map(lambda x: self.visit(
-            x, implementation), ir.arguments))
+        args = []
+
+        for id, argument in enumerate(ir.arguments):
+            arg_code = self.visit(argument, implementation)
+            arg_type = ir.operator.signature.arguments[id][1]
+            if isinstance(arg_type, Pointer) and argument.type == arg_type.element:
+                arg_code = f"&{arg_code}"
+            args.append(arg_code)
+        args = ', '.join(args)
         if isinstance(ir.operator, expr.Constructor):
             return f"(({self.format_type(ir.operator.type)}) {{{args}}})"
         else:

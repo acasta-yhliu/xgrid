@@ -7,7 +7,7 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
+from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
 from xgrid.util.typing import BaseType, Void
@@ -74,6 +74,7 @@ class Parser:
         self.context_stack = [mode]
 
         self.scope: dict[str, Variable] = {}
+        self.tmpid = 0
         self.args: list[tuple[str, BaseType]] = []
         self.global_scope = func.__globals__
         self.global_scope.update({"int": int, "float": float, "bool": bool})
@@ -219,6 +220,45 @@ class Parser:
         self.context_stack.pop()
         return body
 
+    def temporary(self, type: BaseType) -> Variable:
+        name = "$" + str(self.tmpid)
+        self.tmpid += 1
+        variable = Variable(name, type)
+        self.scope[name] = variable
+        return variable
+
+    def visit_Assign(self, node: ast.Assign):
+        location = self.location(node)
+        value = cast(Expression, self.visit(node.value))
+        if isinstance(value.type, Grid):
+            self.syntax_error(node, f"Incompatible assignment to grid type")
+
+        pesudo_var = self.temporary(value.type)
+        assignments = [Assignment(location, Identifier(
+            location, pesudo_var.type, "store", pesudo_var), value)]
+        pesudo_value = Identifier(
+            location, pesudo_var.type, "load", pesudo_var)
+
+        for target in reversed(node.targets):
+            terminal = self.resolve_local(target)
+
+            # try to define new variable
+            if terminal is None:
+                if isinstance(target, ast.Name):
+                    variable = Variable(target.id, value.type)
+                    self.scope[target.id] = variable
+                    terminal = Identifier(
+                        location, value.type, "load", variable)
+                else:
+                    self.syntax_error(node, f"Undefined identifier {terminal}")
+
+            assignments.append(Assignment(location, terminal, pesudo_value))
+
+        return assignments
+
+    def visit_AugAssign(self, node: ast.AugAssign):
+        pass
+
     # TODO: for loop, assign statement
 
     # ===== expressions =====
@@ -338,7 +378,7 @@ class Parser:
 
         return scope
 
-    def resolve_local(self, node: ast.AST, create_type: Value | None = None, create_name: str = "") -> Terminal | None:
+    def resolve_local(self, node: ast.AST) -> Terminal | None:
         location = self.location(node)
 
         if isinstance(node, ast.Subscript):
@@ -411,12 +451,7 @@ class Parser:
                     variable.type, Pointer) else variable.type
                 return Identifier(self.location(node), t, context(node.ctx), variable)
             except KeyError:
-                if create_type is not None:
-                    variable = Variable(create_name, create_type)
-                    self.scope[node.id] = variable
-                    return Identifier(self.location(node), create_type, context(node.ctx), variable)
-                else:
-                    return None
+                return None
 
         else:
             self.syntax_error(
@@ -444,8 +479,9 @@ class Parser:
                     local_obj.type.dataclass, node.func.attr, None)
                 func_name = f"{local_obj.type.dataclass.__qualname__}.{node.func.attr}"
             else:
-                # TODO: fixed method call
-                self.syntax_error(node, "dead")
+                # TODO (not now): fixed method call
+                self.syntax_error(
+                    node, f"Invalid method call on type {local_obj.type}")
 
             args: list[Expression] = [local_obj]
         else:

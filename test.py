@@ -140,10 +140,10 @@ def operator() -> None:
     @xgrid.kernel()
     def kernel_test(a: int, b: int, d: Vector3f) -> Vector3f:
         # external_max(a, b)
+        d.x = 0
         with xgrid.c():
             r"""printf("Hello from inline c code, value of d is (%f, %f, %f)\n", d.x, d.y, d.z);"""
-        return Vector3f(cast(float, implemented_max(3, 5)), 3.14, 3.14)
-        # return implemented_max(a, b)
+        return d
 
     test.log(
         f"built {kernel_test.mode} {kernel_test.name} successfully, ir is shown below:")
