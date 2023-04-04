@@ -7,7 +7,7 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, If, Inline, Return, Signature, While
+from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
 from xgrid.util.typing import BaseType, Void
@@ -78,6 +78,8 @@ class Parser:
         self.args: list[tuple[str, BaseType]] = []
         self.global_scope = func.__globals__
         self.global_scope.update({"int": int, "float": float, "bool": bool})
+
+        self.includes = []
 
         self.ir = self.visit(ast_definition)
 
@@ -257,9 +259,78 @@ class Parser:
         return assignments
 
     def visit_AugAssign(self, node: ast.AugAssign):
-        pass
+        value = cast(Expression, self.visit(node.value))
+        target = self.resolve_local(node.target)
+        if target is None:
+            self.syntax_error(node, f"Undefined identifier {target}")
 
-    # TODO: for loop, assign statement
+        optype = type(node.op)
+        if optype not in OperatorMap.binary:
+            self.syntax_error(
+                node, f"Unsupported binary operator '{optype.__name__}'")
+        binary_op = OperatorMap.binary[optype]
+
+        if not isinstance(target.type, Number) or not isinstance(value.type, Number) or target.type != value.type:
+            self.syntax_error(
+                node, f"Incompatible binary operator '{binary_op.value}' with type '{target.type}' and '{value.type}'")
+
+        if binary_op == BinaryOperator.Pow:
+            return_type = Floating(64) if isinstance(
+                target.type, Floating) and value.type.width_bits == 64 else Floating(32)
+        else:
+            return_type = target.type
+
+        return Assignment(self.location(node), target, Binary(self.location(node), return_type, target, value, binary_op))
+
+    def visit_For(self, node: ast.For):
+        if not isinstance(node.target, ast.Name):
+            self.syntax_error(
+                node, f"For loop variable should be a name")
+
+        # check whether is range or not
+        iter_range = node.iter
+        if not isinstance(iter_range, ast.Call) or not isinstance(iter_range.func, ast.Name) or iter_range.func.id != "range":
+            self.syntax_error(node, f"For loop only supports range")
+
+        args = iter_range.args
+        if len(args) not in (2, 3):
+            self.syntax_error(
+                node, f"For loop requires start:end:step or start:end")
+
+        loop_range: list[Expression] = list(map(self.visit, args))
+        if len(loop_range) == 2:
+            loop_range.append(Constant(self.location(node),
+                              Integer(calcsize("i")), 1))
+
+        # check type of loop range
+        loop_range_type = loop_range[2].type
+        for lr in loop_range:
+            if lr.type != loop_range_type or not isinstance(lr.type, Number):
+                self.syntax_error(
+                    node, f"Incompatible loop range type '{lr.type}'")
+
+        var_id = node.target.id
+        if var_id not in self.scope:
+            self.scope[var_id] = Variable(var_id, loop_range_type)
+
+        loop_var = self.scope[var_id]
+        if loop_var.type != loop_range_type:
+            self.syntax_error(
+                node, f"Incompatible loop variable type '{loop_var.type}' with range type '{loop_range_type}'")
+
+        body = self.visits(node.body)
+        return For(self.location(node), loop_var, loop_range[0], loop_range[1], loop_range[2], body)
+
+    def visit_Import(self, node: ast.Import):
+        for name in node.names:
+            if name.asname is not None:
+                self.syntax_error(
+                    node, f"Using import as include requires no alias for '{name.name}'")
+
+            include_name = name.name.replace('.', '/')
+            self.includes.append(include_name + ".h")
+
+        return []
 
     # ===== expressions =====
     def parse_constant(self, node: ast.AST, constant):
@@ -479,7 +550,7 @@ class Parser:
                     local_obj.type.dataclass, node.func.attr, None)
                 func_name = f"{local_obj.type.dataclass.__qualname__}.{node.func.attr}"
             else:
-                # TODO (not now): fixed method call
+                # fixed method call, in the future ?
                 self.syntax_error(
                     node, f"Invalid method call on type {local_obj.type}")
 

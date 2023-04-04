@@ -81,7 +81,6 @@ class If(Statement):
 class While(Statement):
     condition: Expression
     body: list[Statement]
-    # orelse: list[Statement]
 
     def write(self, format: ElementFormat):
         format.println(kw("while"), self.condition, kw("do"))
@@ -117,3 +116,18 @@ class Inline(Statement):
         with format.indent():
             format.println(plain(self.source))
         format.println(kw("end"))
+
+
+@dataclass
+class For(Statement):
+    variable: Variable
+    start: Expression
+    end: Expression
+    step: Expression
+    body: list[Statement]
+
+    def write(self, format: ElementFormat):
+        format.println(kw("for"), idvar("%" + self.variable.name), kw("in"),
+                       self.start, plain(":"), self.end, plain(":"), self.step)
+        with format.indent():
+            format.print(*self.body)

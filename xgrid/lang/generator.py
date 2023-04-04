@@ -2,6 +2,7 @@ from io import StringIO
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
 import xgrid.lang.ir.expression as expr
+from xgrid.lang.ir.visitor import IRVisitor
 from xgrid.lang.operator import Operator
 from xgrid.util.console import LineFormat
 from xgrid.util.ffi import Compiler, Library
@@ -10,6 +11,15 @@ from xgrid.util.init import get_config
 from xgrid.util.typing import BaseType
 from xgrid.util.typing.reference import Grid, Pointer
 from xgrid.util.typing.value import Boolean, Floating, Integer, Structure
+
+
+class StencilParser(IRVisitor):
+    def __init__(self, ir: list[ir.IR]) -> None:
+        super().__init__()
+        self.ir = ir
+
+    def dimension_var(self, dimension: int):
+        return f"$dim{dimension}"
 
 
 class Generator:

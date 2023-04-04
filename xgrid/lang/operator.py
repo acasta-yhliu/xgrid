@@ -34,7 +34,9 @@ class Operator:
     def ir(self) -> Definition:
         _ir = getattr(self, "_ir", None)
         if _ir is None:
-            self._ir = Parser(self.func, self.name, self.mode).result
+            parser = Parser(self.func, self.name, self.mode)
+            self._ir = parser.result
+            self.includes.extend(parser.includes)
         return self._ir
 
     @property
