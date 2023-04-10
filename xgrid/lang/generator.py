@@ -18,8 +18,17 @@ class StencilParser(IRVisitor):
         super().__init__()
         self.ir = ir
 
+        self.stencil_field = None
+
     def dimension_var(self, dimension: int):
         return f"$dim{dimension}"
+
+    def visit_Stencil(self, ir: expr.Stencil):
+        stencil_field = ir.variable.value
+        assert True
+
+        ir.context
+        pass
 
 
 class Generator:

@@ -138,23 +138,19 @@ def implemented_max(a: int, b: int) -> int:
 @test.fact("lang.Operator")
 def operator() -> None:
     @xgrid.kernel()
-    def kernel_test(a: int, b: int, d: Vector3f) -> Vector3f:
-        # external_max(a, b)
-        d.x = 0
-        with xgrid.c():
-            r"""printf("Hello from inline c code, value of d is (%f, %f, %f)\n", d.x, d.y, d.z);"""
-        return d
+    def dot_product(a: Vector3f, b: Vector3f) -> float:
+        return a.x * b.x + a.y * b.y + a.z * b.z
 
     test.log(
-        f"built {kernel_test.mode} {kernel_test.name} successfully, ir is shown below:")
-    kernel_test.print_ir()
+        f"built {dot_product.mode} {dot_product.name} successfully, ir is shown below:")
+    dot_product.print_ir()
     test.log(f"generated following c source code:")
-    print(kernel_test.source)
+    print(dot_product.source)
 
     test.log(f"run the following function and you should see the result")
-    vector = Vector3f(1.3, 4.5, 6.7)
-    print(kernel_test(1, 2, vector))
-    print(kernel_test(2, 3, vector))
+    vector_a = Vector3f(1, 2, 3)
+    vector_b = Vector3f(4, 5, 6)
+    print(dot_product(vector_a, vector_b))
 
 
 xgrid.init(comment=True)
