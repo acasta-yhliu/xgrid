@@ -1,3 +1,6 @@
+from typing import Any
+
+
 class StubContext:
     def __enter__(self):
         pass
@@ -10,5 +13,5 @@ def c() -> StubContext:
     ...
 
 
-def critical() -> StubContext:
+def boundary(field: Any, type: int) -> StubContext:
     ...

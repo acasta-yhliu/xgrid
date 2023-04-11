@@ -1,5 +1,2 @@
-[ ] Frontend compiler
-[ ] Code generator
-[ ] Dynamic link library ffi helper (ctypes wrapper) 
-    Serialize for structure, pointer and array
-[ ] Fixed and default width of number literal
+[ ] Handle boundary condition with "with boundary" statement
+[ ] Generate code for grid with boundary condition

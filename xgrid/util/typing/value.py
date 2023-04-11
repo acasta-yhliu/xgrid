@@ -5,7 +5,9 @@ from xgrid.util.typing import BaseType
 
 @dataclass
 class Value(BaseType):
-    pass
+    @property
+    def abbr(self) -> str:
+        return ""
 
 
 @dataclass
@@ -19,6 +21,10 @@ class Boolean(Value):
 
     def __repr__(self) -> str:
         return "Boolean"
+    
+    @property
+    def abbr(self) -> str:
+        return "b"
 
 
 @dataclass
@@ -48,6 +54,10 @@ class Integer(Number):
 
     def __repr__(self) -> str:
         return f"Integer({self.width_bits})"
+    
+    @property
+    def abbr(self) -> str:
+        return f"i{self.width_bits}"
 
 
 @dataclass
@@ -67,6 +77,10 @@ class Floating(Number):
 
     def __repr__(self) -> str:
         return f"Floating({self.width_bits})"
+    
+    @property
+    def abbr(self) -> str:
+        return f"f{self.width_bits}"
 
 
 @dataclass
@@ -79,7 +93,7 @@ class Structure(Value):
 
     def __post_init__(self):
         self.elements_map = dict(self.elements)
-        self._ctype = type(f"__ctypes_{self.name}",
+        self._ctype = type(f"st{self.name}",
                            (ctypes.Structure,), {"_fields_": [(x[0], x[1].ctype) for x in self.elements]})
 
     @property
@@ -94,3 +108,7 @@ class Structure(Value):
 
     def __repr__(self) -> str:
         return self.name
+
+    @property
+    def abbr(self) -> str:
+        return f"st{self.name}"

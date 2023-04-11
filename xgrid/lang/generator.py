@@ -107,10 +107,14 @@ class Generator:
             implementation.println("};")
         elif isinstance(t, Grid):
             with implementation.indent():
-                implementation.println("int32_t time_idx, time_ttl;")
+                implementation.println("int32_t time_idx;")
+                implementation.println("int32_t time_ttl;")
                 implementation.println(f"int32_t shape[{t.dimension}];")
                 implementation.println(
                     f"{self.format_type(t.element)}** data;")
+                implementation.println("int32_t* boundary_mask;")
+                implementation.println(
+                    f"{self.format_type(t.element)}* boundary_value;")
             implementation.println("};")
 
     def define_operator(self, operator: Operator):

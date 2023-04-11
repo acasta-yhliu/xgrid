@@ -138,8 +138,8 @@ def implemented_max(a: int, b: int) -> int:
 @test.fact("lang.Operator")
 def operator() -> None:
     @xgrid.kernel()
-    def dot_product(a: Vector3f, b: Vector3f) -> float:
-        return a.x * b.x + a.y * b.y + a.z * b.z
+    def dot_product(a: Vector3f, b: xgrid.grid[Vector3f, 2]) -> float:
+        return a.x + a.y
 
     test.log(
         f"built {dot_product.mode} {dot_product.name} successfully, ir is shown below:")
@@ -147,10 +147,10 @@ def operator() -> None:
     test.log(f"generated following c source code:")
     print(dot_product.source)
 
-    test.log(f"run the following function and you should see the result")
-    vector_a = Vector3f(1, 2, 3)
-    vector_b = Vector3f(4, 5, 6)
-    print(dot_product(vector_a, vector_b))
+    # test.log(f"run the following function and you should see the result")
+    # vector_a = Vector3f(1, 2, 3)
+    # vector_b = Vector3f(4, 5, 6)
+    # print(dot_product(vector_a, vector_b))
 
 
 xgrid.init(comment=True)

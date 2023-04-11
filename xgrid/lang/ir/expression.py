@@ -115,7 +115,6 @@ class Identifier(Terminal):
 @dataclass
 class Stencil(Terminal):
     variable: Variable
-    critical: bool
     time_offset: int
     space_offset: list[int] | list[Expression]
 
@@ -124,10 +123,7 @@ class Stencil(Terminal):
 
     def write(self, format: ElementFormat):
         offset = f"[{', '.join(map(str, self.space_offset))}][{self.time_offset}]"
-        if self.critical:
-            format.print(kw("stencil"), self.variable, plain(offset))
-        else:
-            format.print(self.variable, plain(offset))
+        format.print(self.variable, plain(offset))
 
 
 @dataclass

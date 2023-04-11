@@ -31,18 +31,20 @@ class Pointer(Reference):
         return f"Pointer of {repr(self.element)}"
 
 
-class CGrid(ctypes.Structure):
-    pass
-
-
 @dataclass
 class Grid(Reference):
     element: Value
     dimension: int
 
     def __post_init__(self):
-        # represented by an structure
-        self._ctype = CGrid
+        self._ctype = type(f"__Grid{self.dimension}d_{self.element.abbr}", (ctypes.Structure,), {
+            "_fields_": [("time_idx", ctypes.c_int32),
+                         ("time_ttl", ctypes.c_int32),
+                         ("shape", ctypes.c_int32 * self.dimension),
+                         ("data", ctypes.POINTER(ctypes.POINTER(self.element.ctype))),
+                         ("boundary_mask", ctypes.POINTER(ctypes.c_int32)),
+                         ("boudnary_value", ctypes.POINTER(self.element.ctype))]
+        })
 
     @property
     def ctype(self):
@@ -51,7 +53,7 @@ class Grid(Reference):
     def serialize(self, value):
         # timed array would be passed here, call the serialize function of the TimedArray to serialize,
         # it should return a CGrid
-        return value.serialize()
+        return value
 
     def deserialize(self, value):
         assert False, "Grid should not be deserialized"

@@ -213,14 +213,17 @@ class Parser:
         import xgrid.lang as lang
         if global_obj == lang.c:
             self.context_stack.append("c")
-        elif global_obj == lang.critical:
-            self.context_stack.append("critical")
+            body = self.visits(node.body)
+            self.context_stack.pop()
+            return body
+        elif global_obj == lang.boundary:
+            self.context_stack.append("boundary")
+            body = self.visits(node.body)
+            self.context_stack.pop()
+            # TODO: handle boundary condition
+            return Bounary()
         else:
             self.syntax_error(node, f"Unknown pragma switch '{global_obj}'")
-
-        body = self.visits(node.body)
-        self.context_stack.pop()
-        return body
 
     def temporary(self, type: BaseType) -> Variable:
         name = "$" + str(self.tmpid)
@@ -475,26 +478,18 @@ class Parser:
                 else:
                     space_slices = [grid.slice]
 
-                critical = self.context == "critical"
                 spaces = []
                 for space_slice in space_slices:
-                    if critical:
-                        space_index = cast(Expression, self.visit(space_slice))
-                        if not isinstance(space_index.type, Integer):
-                            self.syntax_error(
-                                grid, f"Incompatible subscript type '{space_index.type}'")
-                        spaces.append(space_index)
-                    else:
-                        if not isinstance(space_slice, ast.Constant) or type(space_slice.value) != int:
-                            self.syntax_error(
-                                grid, f"Incompatible subscript '{space_slice}'")
-                        spaces.append(space_slice.value)
+                    if not isinstance(space_slice, ast.Constant) or type(space_slice.value) != int:
+                        self.syntax_error(
+                            grid, f"Incompatible subscript '{space_slice}'")
+                    spaces.append(space_slice.value)
 
                 if len(spaces) != grid_var.type.dimension:
                     self.syntax_error(
                         grid, f"Incompatible subscript length '{len(spaces)}' with dimension {grid_var.type.dimension}")
 
-                return Stencil(location, grid_var.type.element, ctx, grid_var, critical, time_offset, spaces)
+                return Stencil(location, grid_var.type.element, ctx, grid_var, time_offset, spaces)
 
             if isinstance(node.value, ast.Subscript):
                 time_slice = node.slice

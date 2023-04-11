@@ -1,6 +1,8 @@
+import ctypes
 from xgrid.util.logging import Logger
 from xgrid.util.typing.annotation import parse_annotation
 from xgrid.util.typing.value import Value
+import xgrid.util.typing.reference as ref
 
 
 class Grid:
@@ -12,9 +14,12 @@ class Grid:
             self.logger.dead(
                 f"Grid element should be value instead of '{dtype_parsed}'")
 
+        self.element = dtype_parsed
         self.shape = shape
-        
-        
+
+        self.typing = ref.Grid(self.element, self.dimension)
+
+        # TODO: implement grid data layout and serialization
 
     @property
     def dimension(self):
