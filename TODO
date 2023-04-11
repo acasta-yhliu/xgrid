@@ -1,2 +1,2 @@
 [ ] Handle boundary condition with "with boundary" statement
-[ ] Generate code for grid with boundary condition
+[ ] Implement fallback option for numpy
