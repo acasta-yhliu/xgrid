@@ -1,4 +1,5 @@
 from io import StringIO
+from typing import Optional
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
 import xgrid.lang.ir.expression as expr
@@ -14,29 +15,39 @@ from xgrid.util.typing.value import Boolean, Floating, Integer, Structure
 
 
 class StencilParser(IRVisitor):
-    def __init__(self, ir: list[ir.IR]) -> None:
+    def __init__(self, logger: Logger) -> None:
         super().__init__()
-        self.ir = ir
+        self.logger = logger
 
-        self.stencil_field = None
-
-    def dimension_var(self, dimension: int):
-        return f"$dim{dimension}"
+        self.stencil_flag = None
 
     def visit_Stencil(self, ir: expr.Stencil):
-        stencil_field = ir.variable.value
-        assert True
+        if ir.context == "store":
+            stencil_field = ir.variable.type
+            assert isinstance(stencil_field, Grid)
+            assert self.stencil_flag is None
+            self.stencil_flag = (ir.variable.name, stencil_field.dimension)
+        elif ir.context == "load":
+            if self.stencil_flag is None:
+                self.logger.dead(
+                    f"Unable to perform load operation to grid '{ir.variable.name}' without stencil context")
 
-        ir.context
-        pass
+    def visit_Assignment(self, ir: stat.Assignment):
+        self.visit(ir.terminal)
+        self.visit(ir.value)
+
+        setattr(ir, "__stencil_flag", self.stencil_flag)
+
+        self.stencil_flag = None
 
 
 class Generator:
     def __init__(self, operator: Operator) -> None:
+        self.logger = Logger(self)
+
         self.operator = operator
         assert self.operator.mode == "kernel"
 
-        self.logger = Logger(self)
         self.config = get_config()
 
         self.definitions = LineFormat()
@@ -89,7 +100,7 @@ class Generator:
         elif isinstance(t, Grid):
             name = f"__Grid{t.dimension}d_{self.format_type(t.element, True)}"
             self.define_type(t, name)
-            return f"struct {name}"
+            return name if abbr else f"struct {name}"
 
     def define_type(self, t: BaseType, name: str):
         if name in self.t_impls:
@@ -117,11 +128,29 @@ class Generator:
                     f"{self.format_type(t.element)}* boundary_value;")
             implementation.println("};")
 
+            space_offsets = ', '.join(
+                f"int32_t space_offset_{i}" for i in range(t.dimension))
+            implementation.println(
+                f"{self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
+            with implementation.indent():
+                implementation.println("int32_t space_offset = 0;")
+                for i in range(t.dimension):
+                    implementation.println(
+                        f"space_offset += space_offset_{i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
+                implementation.println(
+                    f"return &grid.data[(grid.time_idx + time_offset) % grid.time_ttl][space_offset];")
+            implementation.println("}")
+
     def define_operator(self, operator: Operator):
         if operator.name in self.op_impls:
             return
 
         opir = operator.ir
+
+        previsitors = [StencilParser(self.logger)]
+        for visitor in previsitors:
+            visitor.visit(opir)
+
         implementation = LineFormat()
         self.op_impls[operator.name] = implementation
 
@@ -137,6 +166,7 @@ class Generator:
         implementation.println(definition + "{")
 
         with implementation.indent():
+            # variable definitions
             for name, var in operator.ir.scope.items():
                 if name not in operator.signature.argnames_map:
                     implementation.println(
@@ -203,8 +233,29 @@ class Generator:
         implementation.println(f"{self.visit(ir.value, implementation)};")
 
     def visit_Assignment(self, ir: stat.Assignment, implementation: LineFormat):
+        stencil_flag: Optional[tuple[str, int]] = getattr(
+            ir, "__stencil_flag", None)
+
+        if stencil_flag is not None:
+            gname, gdim = stencil_flag
+        else:
+            gname, gdim = "", 0
+
+        if self.config.parallel and gdim != 0:
+            implementation.println(
+                f"#pragma omp parallel for collapse({gdim})", indent=False)
+
+        for i in range(gdim):
+            implementation.println(
+                f"for (int32_t $dim{i} = 0; $dim{i} < {gname}.shape[{i}]; $dim{i}++) {{")
+            implementation.force_indent()
+
         implementation.println(
             f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
+
+        for i in range(gdim):
+            implementation.force_dedent()
+            implementation.println("}")
 
     def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
         implementation.println(ir.source)
@@ -258,5 +309,9 @@ class Generator:
         return f"(({self.format_type(ir.type)})({self.visit(ir.value, implementation)}))"
 
     def visit_Stencil(self, ir: expr.Stencil, implementation: LineFormat):
-        return "<stencil>"
-    # TODO: handle stencil
+        irvar = ir.variable
+        assert isinstance(irvar.type, Grid)
+
+        indexes = ', '.join(
+            f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
+        return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {ir.time_offset}))"

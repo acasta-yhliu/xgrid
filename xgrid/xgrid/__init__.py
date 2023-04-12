@@ -9,7 +9,7 @@ from ctypes import c_int32, POINTER
 
 def parse_numpy_dtype(dtype: Value):
     # TODO: parse this into numpy dtype
-    pass
+    return np.float32
 
 
 class Grid:

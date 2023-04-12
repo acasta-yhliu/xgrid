@@ -256,6 +256,9 @@ class Parser:
                         location, value.type, "load", variable)
                 else:
                     self.syntax_error(node, f"Undefined identifier {terminal}")
+            
+            if terminal.type != pesudo_value.type:
+                self.syntax_error(node, f"Incompatible assignment from type {pesudo_value.type} to {terminal.type}")
 
             assignments.append(Assignment(location, terminal, pesudo_value))
 

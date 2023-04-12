@@ -3,7 +3,7 @@ from io import StringIO
 import os
 import shutil
 import time
-from typing import Callable, cast
+from typing import Callable
 import xgrid
 from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
@@ -138,7 +138,8 @@ def implemented_max(a: int, b: int) -> int:
 @test.fact("lang.Operator")
 def operator() -> None:
     @xgrid.kernel()
-    def dot_product(a: Vector3f, b: xgrid.grid[Vector3f, 2]) -> float:
+    def dot_product(a: Vector3f, b: xgrid.grid[float, 2]) -> float:
+        b[0, 0] = 3.0
         return a.x + a.y
 
     test.log(
@@ -147,10 +148,13 @@ def operator() -> None:
     test.log(f"generated following c source code:")
     print(dot_product.source)
 
+    grid = xgrid.Grid((6, 7), dtype=float)
+
     # test.log(f"run the following function and you should see the result")
-    # vector_a = Vector3f(1, 2, 3)
+    vector_a = Vector3f(1, 2, 3)
     # vector_b = Vector3f(4, 5, 6)
-    # print(dot_product(vector_a, vector_b))
+    print(dot_product(vector_a, grid))
+    print(grid.now)
 
 
 xgrid.init(comment=True)

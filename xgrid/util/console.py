@@ -161,6 +161,12 @@ class LineFormat:
         self.indent_size = indent_size
         self.lines: list[str] = []
 
+    def force_indent(self):
+        self.indents += self.indent_size
+
+    def force_dedent(self):
+        self.indents -= self.indent_size
+
     def indent(self) -> "LineFormat.IndentationGuard":
         return LineFormat.IndentationGuard(self)
 

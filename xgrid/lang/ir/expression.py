@@ -116,7 +116,7 @@ class Identifier(Terminal):
 class Stencil(Terminal):
     variable: Variable
     time_offset: int
-    space_offset: list[int] | list[Expression]
+    space_offset: list[int]
 
     def __post_init__(self):
         assert isinstance(self.variable.type, Grid)
