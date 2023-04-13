@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass
 import struct
 import sys
+from typing import Literal
 from xgrid.util.logging import Logger
 
 
@@ -14,6 +15,7 @@ class Configuration:
     cacheroot: str
     comment: bool
     indexguard: bool
+    opt_level: Literal[0, 1, 2, 3]
 
     def __repr__(self) -> str:
         return repr(asdict(self))
@@ -24,6 +26,8 @@ class Configuration:
 
         if self.parallel:
             flags.append("-fopenmp")
+
+        flags.append(f"-O{self.opt_level}")
 
         return flags
 
@@ -37,7 +41,7 @@ def get_config() -> Configuration:
     return _config
 
 
-def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, indexguard: bool = False) -> None:
+def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, indexguard: bool = False, opt_level: Literal[0, 1, 2, 3] = 2) -> None:
     global _config
 
     if sys.version_info < (3, 10):
@@ -53,6 +57,7 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: 
             logger.fail(
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
-    _config = Configuration(parallel, cc, cacheroot, comment, indexguard)
+    _config = Configuration(parallel, cc, cacheroot,
+                            comment, indexguard, opt_level)
 
     logger.info(f"initialized with configuration: {_config}")

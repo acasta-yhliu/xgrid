@@ -165,12 +165,15 @@ def operator_structure() -> None:
 def operator_grid() -> None:
     @xgrid.kernel()
     def aux(a: xgrid.grid[int, 2]) -> None:
-        a[0, 0] = a[0, 0][1]
+        a[0, 0] = 4
 
     grid = xgrid.Grid((10, 10), dtype=int)
     aux(grid)
 
-    test.log(f"execute grid kernel operator, should be fine")
+    test.log(f"execute grid kernel operator, should give 4 to each elements")
+    for a in grid.now:
+        for element in a:
+            assert element
 
 
 @test.fact("lang.Operator.grid_indexguard")
@@ -185,6 +188,5 @@ def operator_grid_indexguard() -> None:
     test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
 
 
-xgrid.init(comment=True, cacheroot=".xgridtest",
-           parallel=False, indexguard=True)
+xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True)
 test.run()
