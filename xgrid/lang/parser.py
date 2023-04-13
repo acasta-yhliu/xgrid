@@ -140,8 +140,8 @@ class Parser:
                 self.syntax_error(node,
                                   f"Argument '{arg_name}' requires non-void type annotation ({arg_param.annotation})")
 
-            self.scope[arg_name] = Variable(arg_name, arg_type)
-            self.args.append((arg_name, arg_type))
+            self.scope[arg_name] = Variable(arg_name, arg_type)  # type: ignore
+            self.args.append((arg_name, arg_type))  # type: ignore
 
         ret_sig = parse_annotation(sig.return_annotation)
         if ret_sig is None or isinstance(ret_sig, Reference):
