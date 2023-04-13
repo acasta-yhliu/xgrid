@@ -5,6 +5,7 @@ from xgrid.lang.parser import Parser
 from xgrid.util.console import ElementFormat
 
 from xgrid.util.logging import Logger
+from xgrid.xgrid import Grid as XGrid
 
 
 class Operator:
@@ -25,7 +26,11 @@ class Operator:
                 from xgrid.lang.generator import Generator
                 self.native = Generator(self).native
 
-            return self.native(*args)
+            result = self.native(*args)
+            for arg in args:
+                if isinstance(arg, XGrid):
+                    arg.tick()
+            return result
         else:
             self.logger.dead(
                 f"Invalid call to non-kernel ({self.mode}) operator '{self.name}'")

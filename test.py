@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from io import StringIO
 import os
+import random
 import shutil
 import time
 from typing import Callable
@@ -123,39 +124,42 @@ def ffi_library() -> None:
 TEMP = 10
 
 
-@dataclass
-class Vector3f:
-    x: float
-    y: float
-    z: float
-
-
-@xgrid.function()
-def implemented_max(a: int, b: int) -> int:
-    return a if a > b else b
-
-
-@test.fact("lang.Operator")
-def operator() -> None:
+@test.fact("lang.Operator.simple")
+def operator_simple() -> None:
     @xgrid.kernel()
-    def dot_product(a: Vector3f, b: xgrid.grid[float, 2]) -> float:
-        b[0, 0] = 3.0
-        return a.x + a.y
+    def aux(a: int, b: int) -> int:
+        return a + b + TEMP
 
+    a = random.randint(0, 1000)
+    b = random.randint(0, 1000)
     test.log(
-        f"built {dot_product.mode} {dot_product.name} successfully, ir is shown below:")
-    dot_product.print_ir()
-    test.log(f"generated following c source code:")
-    print(dot_product.source)
-
-    grid = xgrid.Grid((6, 7), dtype=float)
-
-    # test.log(f"run the following function and you should see the result")
-    vector_a = Vector3f(1, 2, 3)
-    # vector_b = Vector3f(4, 5, 6)
-    print(dot_product(vector_a, grid))
-    print(grid.now)
+        f"execute simple kernel operator, should obtain (a := {a}) + (b := {b}) + (TEMP := 10)")
+    assert aux(a, b) == a + b + TEMP
 
 
-xgrid.init(comment=True)
+@dataclass
+class Vector3i:
+    x: int
+    y: int
+    z: int
+
+    def dot(self, b: "Vector3i"):
+        return self.x * b.x + self.y * b.y + self.z * b.z
+
+
+@test.fact("lang.Operator.structure")
+def operator_structure() -> None:
+    @xgrid.kernel()
+    def aux(a: Vector3i, b: Vector3i) -> int:
+        return a.x * b.x + a.y * b.y + a.z * b.z
+
+    a = Vector3i(random.randint(0, 1000), random.randint(
+        0, 1000), random.randint(0, 1000))
+    b = Vector3i(random.randint(0, 1000), random.randint(
+        0, 1000), random.randint(0, 1000))
+    test.log(f"execute structure kernel operator, should obtain {a} . {b}")
+    assert aux(a, b) == a.dot(b)
+
+
+xgrid.init(comment=True, cacheroot=".xgridtest")
 test.run()

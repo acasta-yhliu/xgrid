@@ -1,15 +1,21 @@
 import numpy as np
 from xgrid.util.logging import Logger
 from xgrid.util.typing.annotation import parse_annotation
-from xgrid.util.typing.value import Value
+from xgrid.util.typing.value import Boolean, Floating, Integer, Structure, Value
 import xgrid.util.typing.reference as ref
 
 from ctypes import c_int32, POINTER
 
 
 def parse_numpy_dtype(dtype: Value):
-    # TODO: parse this into numpy dtype
-    return np.float32
+    if isinstance(dtype, Boolean):
+        return np.bool_
+    elif isinstance(dtype, Integer):
+        return {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}[dtype.width_bits]
+    elif isinstance(dtype, Floating):
+        return {32: np.float32, 64: np.float64}[dtype.width_bits]
+    elif isinstance(dtype, Structure):
+        return [(x[0], parse_numpy_dtype(x[1])) for x in dtype.elements]
 
 
 class Grid:
