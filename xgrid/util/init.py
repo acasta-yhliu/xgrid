@@ -13,6 +13,7 @@ class Configuration:
     cc: list[str]
     cacheroot: str
     comment: bool
+    indexguard: bool
 
     def __repr__(self) -> str:
         return repr(asdict(self))
@@ -36,7 +37,7 @@ def get_config() -> Configuration:
     return _config
 
 
-def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False) -> None:
+def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, indexguard: bool = False) -> None:
     global _config
 
     if sys.version_info < (3, 10):
@@ -52,6 +53,6 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: 
             logger.fail(
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
-    _config = Configuration(parallel, cc, cacheroot, comment)
+    _config = Configuration(parallel, cc, cacheroot, comment, indexguard)
 
     logger.info(f"initialized with configuration: {_config}")

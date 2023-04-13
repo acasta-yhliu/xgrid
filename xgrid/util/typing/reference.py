@@ -39,9 +39,7 @@ class Grid(Reference):
     def __post_init__(self):
         # this should be changed according with type definition of structure
         self._ctype = type(f"__Grid{self.dimension}d_{self.element.abbr}", (ctypes.Structure,), {
-            "_fields_": [("time_idx", ctypes.c_int32),
-                         ("time_ttl", ctypes.c_int32),
-                         ("shape", ctypes.c_int32 * self.dimension),
+            "_fields_": [("shape", ctypes.c_int32 * self.dimension),
                          ("data", ctypes.POINTER(ctypes.POINTER(self.element.ctype))),
                          ("boundary_mask", ctypes.POINTER(ctypes.c_int32)),
                          ("boudnary_value", ctypes.POINTER(self.element.ctype))]

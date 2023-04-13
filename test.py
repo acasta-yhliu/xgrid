@@ -157,9 +157,34 @@ def operator_structure() -> None:
         0, 1000), random.randint(0, 1000))
     b = Vector3i(random.randint(0, 1000), random.randint(
         0, 1000), random.randint(0, 1000))
-    test.log(f"execute structure kernel operator, should obtain {a} . {b}")
+    test.log(f"execute structure kernel operator, should obtain {a} dot {b}")
     assert aux(a, b) == a.dot(b)
 
 
-xgrid.init(comment=True, cacheroot=".xgridtest")
+@test.fact("lang.Operator.grid")
+def operator_grid() -> None:
+    @xgrid.kernel()
+    def aux(a: xgrid.grid[int, 2]) -> None:
+        a[0, 0] = a[0, 0][1]
+
+    grid = xgrid.Grid((10, 10), dtype=int)
+    aux(grid)
+
+    test.log(f"execute grid kernel operator, should be fine")
+
+
+@test.fact("lang.Operator.grid_indexguard")
+def operator_grid_indexguard() -> None:
+    @xgrid.kernel()
+    def aux(a: xgrid.grid[int, 2]) -> None:
+        a[0, 0] = a[-1, -1][1]
+
+    grid = xgrid.Grid((10, 10), dtype=int)
+    aux(grid)
+
+    test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
+
+
+xgrid.init(comment=True, cacheroot=".xgridtest",
+           parallel=False, indexguard=True)
 test.run()

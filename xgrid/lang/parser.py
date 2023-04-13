@@ -238,31 +238,27 @@ class Parser:
         if isinstance(value.type, Grid):
             self.syntax_error(node, f"Incompatible assignment to grid type")
 
-        pesudo_var = self.temporary(value.type)
-        assignments = [Assignment(location, Identifier(
-            location, pesudo_var.type, "store", pesudo_var), value)]
-        pesudo_value = Identifier(
-            location, pesudo_var.type, "load", pesudo_var)
+        if len(node.targets) != 1:
+            self.syntax_error(node, f"Multiple assignment is not supported")
+        target = node.targets[0]
 
-        for target in reversed(node.targets):
-            terminal = self.resolve_local(target)
+        terminal = self.resolve_local(target)
 
-            # try to define new variable
-            if terminal is None:
-                if isinstance(target, ast.Name):
-                    variable = Variable(target.id, value.type)
-                    self.scope[target.id] = variable
-                    terminal = Identifier(
-                        location, value.type, "load", variable)
-                else:
-                    self.syntax_error(node, f"Undefined identifier {terminal}")
-            
-            if terminal.type != pesudo_value.type:
-                self.syntax_error(node, f"Incompatible assignment from type {pesudo_value.type} to {terminal.type}")
+        # try to define new variable
+        if terminal is None:
+            if isinstance(target, ast.Name):
+                variable = Variable(target.id, value.type)
+                self.scope[target.id] = variable
+                terminal = Identifier(
+                    location, value.type, "load", variable)
+            else:
+                self.syntax_error(node, f"Undefined identifier {terminal}")
 
-            assignments.append(Assignment(location, terminal, pesudo_value))
+        if terminal.type != value.type:
+            self.syntax_error(
+                node, f"Incompatible assignment from type {value.type} to {terminal.type}")
 
-        return assignments
+        return Assignment(location, terminal, value)
 
     def visit_AugAssign(self, node: ast.AugAssign):
         value = cast(Expression, self.visit(node.value))
@@ -483,10 +479,26 @@ class Parser:
 
                 spaces = []
                 for space_slice in space_slices:
-                    if not isinstance(space_slice, ast.Constant) or type(space_slice.value) != int:
+                    failed = False
+                    value = 0
+                    if isinstance(space_slice, ast.UnaryOp):
+                        if type(space_slice.op) != ast.USub:
+                            failed = True
+                        else:
+                            if not isinstance(space_slice.operand, ast.Constant) or type(space_slice.operand.value) != int:
+                                failed = True
+                            else:
+                                value = -space_slice.operand.value
+                    elif isinstance(space_slice, ast.Constant):
+                        if type(space_slice.value) != int:
+                            failed = True
+                        else:
+                            value = space_slice.value
+
+                    if failed:
                         self.syntax_error(
                             grid, f"Incompatible subscript '{space_slice}'")
-                    spaces.append(space_slice.value)
+                    spaces.append(value)
 
                 if len(spaces) != grid_var.type.dimension:
                     self.syntax_error(
@@ -497,9 +509,11 @@ class Parser:
             if isinstance(node.value, ast.Subscript):
                 time_slice = node.slice
                 if not isinstance(time_slice, ast.Constant) or type(time_slice.value) != int:
+                    print(time_slice)
                     self.syntax_error(
                         node.value, f"Invalid time dimension subscript to '{node.value.__class__.__name__}")
                 time_offset = time_slice.value
+                node = node.value
             else:
                 time_offset = 0
 

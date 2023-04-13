@@ -1,8 +1,6 @@
-import sys
-from typing import Any, TextIO
+from typing import Any
 from xgrid.lang.ir.statement import Definition
 from xgrid.lang.parser import Parser
-from xgrid.util.console import ElementFormat
 
 from xgrid.util.logging import Logger
 from xgrid.xgrid import Grid as XGrid
@@ -24,13 +22,15 @@ class Operator:
         if self.mode == "kernel":
             if self.native is None:
                 from xgrid.lang.generator import Generator
-                self.native = Generator(self).native
 
-            result = self.native(*args)
+                self.native, self.depth = Generator(self).result
+
+            # tick the field and resize the time step if necessary
             for arg in args:
                 if isinstance(arg, XGrid):
-                    arg.tick()
-            return result
+                    arg._op_invoke(self.depth)
+
+            return self.native(*args)
         else:
             self.logger.dead(
                 f"Invalid call to non-kernel ({self.mode}) operator '{self.name}'")
@@ -45,18 +45,8 @@ class Operator:
         return self._ir
 
     @property
-    def source(self) -> str:
-        from xgrid.lang.generator import Generator
-        return Generator(self).source
-
-    @property
     def signature(self):
         return self.ir.signature
-
-    def print_ir(self, *, indent: int = 2, device: TextIO = sys.stdout):
-        formatter = ElementFormat(indent)
-        self.ir.write(formatter)
-        formatter.write(device)
 
 
 def kernel(*, name: str | None = None, includes: list[str] | None = None):

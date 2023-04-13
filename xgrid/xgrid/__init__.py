@@ -4,7 +4,7 @@ from xgrid.util.typing.annotation import parse_annotation
 from xgrid.util.typing.value import Boolean, Floating, Integer, Structure, Value
 import xgrid.util.typing.reference as ref
 
-from ctypes import c_int32, POINTER
+from ctypes import c_bool, c_int32, POINTER
 
 
 def parse_numpy_dtype(dtype: Value):
@@ -26,7 +26,7 @@ class Grid:
         if not isinstance(dtype_parsed, Value):
             self.logger.dead(
                 f"Grid element should be value instead of '{dtype_parsed}'")
-        numpy_dtype = parse_numpy_dtype(dtype_parsed)
+        self.numpy_dtype = parse_numpy_dtype(dtype_parsed)
 
         # properties
         self.element = dtype_parsed
@@ -35,14 +35,19 @@ class Grid:
         # internal typing used for serialization
         self.typing = ref.Grid(self.element, self.dimension)
 
-        # data layout
-        self._time_idx = 0
-        self._time_ttl = 1
-        self._data = [np.zeros(shape=shape, dtype=numpy_dtype)]
+        self._data = [np.zeros(shape=shape, dtype=self.numpy_dtype)]
 
         # boundary condition
         self._boundary_mask = np.zeros(shape=shape, dtype=np.int32)
-        self._boundary_value = np.zeros(shape=shape, dtype=numpy_dtype)
+        self._boundary_value = np.zeros(shape=shape, dtype=self.numpy_dtype)
+
+    def _op_invoke(self, depth: int):
+        while len(self._data) < depth:
+            self._data.append(
+                np.zeros(shape=self.shape, dtype=self.numpy_dtype))
+        self._data = self._data[:depth]
+
+        np.roll(self._data, 1)
 
     @property
     def dimension(self):
@@ -52,25 +57,20 @@ class Grid:
         boundary_mask = self._boundary_mask.ctypes.data_as(POINTER(c_int32))
         boundary_value = self._boundary_value.ctypes.data_as(
             POINTER(self.element.ctype))
-        data = (POINTER(self.element.ctype) * self._time_ttl)(*
-                                                              list(map(lambda x: x.ctypes.data_as(POINTER(self.element.ctype)), self._data)))
+        data = (POINTER(self.element.ctype) * len(self._data))(*
+                                                               [data.ctypes.data_as(POINTER(self.element.ctype)) for data in self._data])
 
-        return self.typing.ctype(self._time_idx,
-                                 self._time_ttl,
-                                 (c_int32 * self.dimension)(*self.shape),
+        return self.typing.ctype((c_int32 * self.dimension)(*self.shape),
                                  data,
                                  boundary_mask,
                                  boundary_value)
 
-    def tick(self):
-        self._time_idx = (self._time_idx + 1) % self._time_ttl
-
     @property
     def now(self):
-        return self._data[self._time_idx]
+        return self._data[0]
 
     def __getitem__(self, slice):
-        return self._data[self._time_idx][slice]
+        return self.now[slice]
 
     def __setitem__(self, slice, value):
-        self._data[self._time_idx][slice] = value
+        self.now[slice] = value

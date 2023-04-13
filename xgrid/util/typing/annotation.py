@@ -1,6 +1,6 @@
 from dataclasses import fields, is_dataclass
 import struct
-from typing import Generic, TypeVar, get_args, get_origin
+from typing import Any, Generic, TypeVar, get_args, get_origin
 
 from xgrid.util.typing import BaseType, Void
 import xgrid.util.typing.value as val
@@ -22,7 +22,9 @@ class ptr(Annotation, Generic[Value]):
 
 
 class grid(Annotation, Generic[Value, Length]):
-    pass
+    def __getitem__(self, key) -> Any: ...
+
+    def __setitem__(self, key, value) -> Any: ...
 
 
 def parse_annotation(annotation) -> BaseType | None:

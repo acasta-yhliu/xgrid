@@ -9,9 +9,13 @@ from xgrid.util.console import LineFormat
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.init import get_config
-from xgrid.util.typing import BaseType
+from xgrid.util.typing import BaseType, Void
 from xgrid.util.typing.reference import Grid, Pointer
 from xgrid.util.typing.value import Boolean, Floating, Integer, Structure
+
+
+def repeat_str(element: str, time: int, sep: str):
+    return sep.join(element for _ in range(time))
 
 
 class StencilParser(IRVisitor):
@@ -64,12 +68,13 @@ class Generator:
 
         self.op_impls: dict[str, LineFormat] = {}
         self.t_impls: dict[str, LineFormat] = {}
+        self.depth = 0
 
         self.define_operator(operator)
 
     @property
-    def native(self):
-        return self.compile()
+    def result(self):
+        return self.compile(), self.depth + 1
 
     @property
     def source(self):
@@ -83,6 +88,9 @@ class Generator:
             return io.getvalue()
 
     def format_type(self, t: BaseType, abbr: bool = False):
+        if isinstance(t, Void):
+            return "void"
+
         if isinstance(t, Boolean):
             return "b" if abbr else "bool"
         elif isinstance(t, Integer):
@@ -118,8 +126,6 @@ class Generator:
             implementation.println("};")
         elif isinstance(t, Grid):
             with implementation.indent():
-                implementation.println("int32_t time_idx;")
-                implementation.println("int32_t time_ttl;")
                 implementation.println(f"int32_t shape[{t.dimension}];")
                 implementation.println(
                     f"{self.format_type(t.element)}** data;")
@@ -133,12 +139,30 @@ class Generator:
             implementation.println(
                 f"{self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
             with implementation.indent():
+                # TODO: implement boundary check
+                # introduct index check would halt the program if the index is out of range, print an fatal information and return 0, 0, 0 value
+                if self.config.indexguard:
+                    index_out_of_range = ' || '.join(
+                        f"space_offset_{i} < 0 || space_offset_{i} >= grid.shape[{i}]" for i in range(t.dimension))
+                    implementation.println(f"if ({index_out_of_range}) {{")
+                    with implementation.indent():
+                        shape_formatter = repeat_str('%d', t.dimension, ', ')
+                        index_str = ', '.join(
+                            f'space_offset_{i}' for i in range(t.dimension))
+                        shape_str = ', '.join(
+                            f"grid.shape[{i}]" for i in range(t.dimension))
+                        implementation.println(
+                            f"fprintf(stderr, \"index '({shape_formatter})' out of range '({shape_formatter})' in kernel '{self.operator.name}'\\n\", {index_str}, {shape_str});")
+                        # make the program not to stop
+                        implementation.println(f"return &grid.data[0][0];")
+                    implementation.println("}")
                 implementation.println("int32_t space_offset = 0;")
                 for i in range(t.dimension):
                     implementation.println(
                         f"space_offset += space_offset_{i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
+                # be assure the index would never be negative
                 implementation.println(
-                    f"return &grid.data[(grid.time_idx + time_offset) % grid.time_ttl][space_offset];")
+                    f"return &grid.data[time_offset][space_offset];")
             implementation.println("}")
 
     def define_operator(self, operator: Operator):
@@ -250,8 +274,18 @@ class Generator:
                 f"for (int32_t $dim{i} = 0; $dim{i} < {gname}.shape[{i}]; $dim{i}++) {{")
             implementation.force_indent()
 
+        if gdim != 0:
+            id = " + ".join(
+                f"$dim{i} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
+            implementation.println(f"if (!{gname}.boundary_mask[{id}]) {{")
+            implementation.force_indent()
+
         implementation.println(
             f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
+
+        if gdim != 0:
+            implementation.force_dedent()
+            implementation.println("}")
 
         for i in range(gdim):
             implementation.force_dedent()
@@ -312,6 +346,8 @@ class Generator:
         irvar = ir.variable
         assert isinstance(irvar.type, Grid)
 
+        self.depth = max(self.depth, abs(ir.time_offset))
+
         indexes = ', '.join(
             f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
-        return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {ir.time_offset}))"
+        return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
