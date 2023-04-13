@@ -21,3 +21,9 @@ class BaseType:
 class Void(BaseType):
     def __repr__(self) -> str:
         return "Void"
+
+
+@dataclass
+class Ignore(BaseType):
+    def __eq__(self, o):
+        return True

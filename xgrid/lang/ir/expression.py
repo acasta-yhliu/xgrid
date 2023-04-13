@@ -169,3 +169,16 @@ class Call(Expression):
         else:
             format.print(idfunc(self.operator.name), plain(
                 "("), *arglist, plain(")"))
+
+
+@dataclass
+class GridInfo(Expression):
+    info: Literal["shape", "dimension"]
+    variable: Variable
+    dimension: Expression | None
+
+    def write(self, format: ElementFormat):
+        format.print(kw(self.info), plain("("), self.variable)
+        if self.dimension is not None:
+            format.print(self.dimension)
+        format.print(plain(")"))

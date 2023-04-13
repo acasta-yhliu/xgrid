@@ -2,7 +2,7 @@ from dataclasses import fields, is_dataclass
 import struct
 from typing import Any, Generic, TypeVar, get_args, get_origin
 
-from xgrid.util.typing import BaseType, Void
+from xgrid.util.typing import BaseType, Ignore, Void
 import xgrid.util.typing.value as val
 import xgrid.util.typing.reference as ref
 
@@ -27,12 +27,15 @@ class grid(Annotation, Generic[Value, Length]):
     def __setitem__(self, key, value) -> Any: ...
 
 
-def parse_annotation(annotation, glbs = globals()) -> BaseType | None:
+def parse_annotation(annotation, glbs=globals()) -> BaseType | None:
     if annotation is None:
         return Void()
-    
+
     if type(annotation) == str:
         annotation = glbs[annotation]
+
+    if annotation is Any:
+        return Ignore()
 
     if annotation in (int, float, bool):
         return {int: val.Integer(struct.calcsize("i")), float: val.Floating(struct.calcsize("f")), bool: val.Boolean()}[annotation]

@@ -351,3 +351,13 @@ class Generator:
         indexes = ', '.join(
             f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
         return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
+
+    def visit_GridInfo(self, ir: expr.GridInfo, implementation: LineFormat):
+        assert isinstance(ir.variable.type, Grid)
+
+        if ir.info == "dimension":
+            return str(ir.variable.type.dimension)
+        elif ir.info == "shape":
+            assert ir.dimension is not None
+
+            return f"{ir.variable.name}.shape[{self.visit(ir.dimension, implementation)}]"

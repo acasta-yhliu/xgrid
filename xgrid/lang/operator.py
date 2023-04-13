@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 from xgrid.lang.ir.statement import Definition
 from xgrid.lang.parser import Parser
 
@@ -7,8 +7,11 @@ from xgrid.util.typing import BaseType
 from xgrid.xgrid import Grid as XGrid
 
 
+CustomTypecheck = Callable[[list[BaseType]], BaseType]
+
+
 class Operator:
-    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None) -> None:
+    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None, typecheck_override: CustomTypecheck | None = None) -> None:
         self.func = func
         self.mode = mode
 
@@ -19,6 +22,7 @@ class Operator:
 
         self.native = None
         self.self_type = self_type
+        self.typecheck_override = typecheck_override
 
     def __call__(self, *args: Any) -> Any:
         if self.mode == "kernel":
@@ -72,7 +76,7 @@ def function(*, method: bool = False, name: str | None = None, includes: list[st
         return aux
 
 
-def external(*, name: str | None = None, includes: list[str] | None = None):
+def external(*, name: str | None = None, includes: list[str] | None = None, typecheck_override: CustomTypecheck):
     def aux(func):
-        return Operator(func, "external", name, includes)
+        return Operator(func, "external", name, includes, typecheck_override=typecheck_override)
     return aux

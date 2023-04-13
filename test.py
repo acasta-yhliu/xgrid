@@ -191,23 +191,26 @@ def operator_grid_indexguard() -> None:
 
 @test.fact("lang.Operator.grid_dot")
 def operator_grid_dot() -> None:
-    fvec = xgrid.grid[float, 1]
+    fmat = xgrid.grid[float, 2]
 
     @xgrid.kernel()
-    def elementwise_mul(result: fvec, a: fvec, b: fvec) -> None:
-        result[0] = a[0] * b[0]
+    def elementwise_mul(result: fmat, a: fmat, b: fmat) -> int:
+        result[0, 0] = a[0, 0] * b[0, 0]
+        return xgrid.shape(result, 0)
 
-    result = xgrid.Grid((10000, ), float)
-    a = xgrid.Grid((10000, ), float)
-    b = xgrid.Grid((10000, ), float)
+    SIZE = 100
 
-    for i in range(10000):
-        a[i] = random.random()
-        b[i] = random.random()
+    result = xgrid.Grid((SIZE, SIZE), float)
+    a = xgrid.Grid((SIZE, SIZE), float)
+    b = xgrid.Grid((SIZE, SIZE), float)
 
-    elementwise_mul(result, a, b)
+    for i in range(SIZE):
+        for j in range(SIZE):
+            a[i, j] = random.random()
+            b[i, j] = random.random()
 
-    assert result.now.sum() == a.now.dot(b.now)
+    assert elementwise_mul(result, a, b) == SIZE
+    assert (result.now == a.now * b.now).all()
 
 
 xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True)

@@ -2,11 +2,11 @@ import ast
 from functools import reduce
 import inspect
 import textwrap
-from typing import NoReturn, cast
+from typing import Literal, NoReturn, cast
 from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
-from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, Identifier, Stencil, Terminal, Unary, UnaryOperator
+from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, GridInfo, Identifier, Stencil, Terminal, Unary, UnaryOperator
 from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
@@ -620,9 +620,23 @@ class Parser:
             self.syntax_error(
                 node, f"Operator '{func_name}' requires {expected} arguments, but got {len(args)}")
 
-        for id, (arg_name, arg_type) in enumerate(func.signature.arguments):
-            if arg_type != args[id].type:
-                self.syntax_error(
-                    node, f"Incompatible type '{args[id].type}' with '{arg_type}' of argument '{arg_name}, operator '{func_name}'")
+        if isinstance(func, Operator) and func.mode == "external" and func.typecheck_override is not None:
+            try:
+                return_type = func.typecheck_override([i.type for i in args])
+            except Exception as e:
+                self.syntax_error(node, e.args[0])
 
-        return Call(self.location(node), func.signature.return_type, func, args)
+            if func.name in ("shape", "dimension"):
+                if not isinstance(args[0], Identifier):
+                    self.syntax_error(
+                        node, f"Incompatible '{func.name}' to argument '{args[0]}'")
+
+                return GridInfo(self.location(node), Integer(calcsize("i")), cast(Literal["shape", "dimension"], func.name), args[0].variable, args[1] if func.name == "shape" else None)
+        else:
+            for id, (arg_name, arg_type) in enumerate(func.signature.arguments):
+                if arg_type != args[id].type:
+                    self.syntax_error(
+                        node, f"Incompatible type '{args[id].type}' with '{arg_type}' of argument '{arg_name}, operator '{func_name}'")
+            return_type = func.signature.return_type
+
+        return Call(self.location(node), return_type, func, args)
