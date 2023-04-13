@@ -51,11 +51,13 @@ def context(ctx: ast.expr_context):
 
 
 class Parser:
-    def __init__(self, func, name: str, mode: str) -> None:
+    def __init__(self, func, name: str, mode: str, self_type: BaseType | None) -> None:
         self.logger = Logger(self)
         self.mode = mode
         self.func = func
         self.name = name
+
+        self.self_type = self_type
 
         # extract source related information
         file = inspect.getsourcefile(func)
@@ -127,14 +129,16 @@ class Parser:
                 self.syntax_error(node,
                                   f"Argument '{arg_name}' of kind '{arg_param.kind}' is not supported")
 
-            if arg_param.annotation == inspect.Parameter.empty:
+            if arg_param.annotation == inspect.Parameter.empty and self.self_type is None:
                 self.syntax_error(node,
                                   f"Argument '{arg_name}' requires type annotation")
 
-            arg_type = parse_annotation(arg_param.annotation)
+            arg_type = self.self_type if arg_param.annotation == inspect.Parameter.empty else parse_annotation(
+                arg_param.annotation, self.global_scope)
+
             if arg_type is None or isinstance(arg_type, Void):
                 self.syntax_error(node,
-                                  f"Argument '{arg_name}' requires non-void type annotation")
+                                  f"Argument '{arg_name}' requires non-void type annotation ({arg_param.annotation})")
 
             self.scope[arg_name] = Variable(arg_name, arg_type)
             self.args.append((arg_name, arg_type))
@@ -508,11 +512,13 @@ class Parser:
 
             if isinstance(node.value, ast.Subscript):
                 time_slice = node.slice
-                if not isinstance(time_slice, ast.Constant) or type(time_slice.value) != int:
-                    print(time_slice)
+                if isinstance(time_slice, ast.Constant) and type(time_slice.value) == int:
+                    time_offset = time_slice.value
+                elif isinstance(time_slice, ast.UnaryOp) and type(time_slice.op) == ast.USub and isinstance(time_slice.operand, ast.Constant) and type(time_slice.operand.value) == int:
+                    time_offset = -time_slice.operand.value
+                else:
                     self.syntax_error(
                         node.value, f"Invalid time dimension subscript to '{node.value.__class__.__name__}")
-                time_offset = time_slice.value
                 node = node.value
             else:
                 time_offset = 0
@@ -555,12 +561,14 @@ class Parser:
         from xgrid.lang.operator import Operator
 
         func_name = None
+        self_type = None
 
         if isinstance(node.func, ast.Attribute) and (local_obj := self.resolve_local(node.func.value)) is not None:
             if isinstance(local_obj.type, Structure):
                 func = getattr(
                     local_obj.type.dataclass, node.func.attr, None)
                 func_name = f"{local_obj.type.dataclass.__qualname__}.{node.func.attr}"
+                self_type = local_obj.type
             else:
                 # fixed method call, in the future ?
                 self.syntax_error(
@@ -596,8 +604,14 @@ class Parser:
 
         # type check the function and arguments
         if not isinstance(func, Operator) and not isinstance(func, Constructor):
-            self.syntax_error(
-                node, f"Invalid call to object '{func}', it is not an operator")
+            # check the lazy method flag
+            method_flag = getattr(func, "__xgrid_method", None)
+            if method_flag is not None and self_type is not None:
+                func = Operator(func, "function",
+                                method_flag[0], method_flag[1], self_type)
+            else:
+                self.syntax_error(
+                    node, f"Invalid call to object '{func}', it is not an operator")
 
         if func_name is None:
             func_name = func.name  # type: ignore

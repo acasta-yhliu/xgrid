@@ -27,9 +27,12 @@ class grid(Annotation, Generic[Value, Length]):
     def __setitem__(self, key, value) -> Any: ...
 
 
-def parse_annotation(annotation) -> BaseType | None:
+def parse_annotation(annotation, glbs = globals()) -> BaseType | None:
     if annotation is None:
         return Void()
+    
+    if type(annotation) == str:
+        annotation = glbs[annotation]
 
     if annotation in (int, float, bool):
         return {int: val.Integer(struct.calcsize("i")), float: val.Floating(struct.calcsize("f")), bool: val.Boolean()}[annotation]

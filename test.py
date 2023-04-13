@@ -142,8 +142,9 @@ class Vector3i:
     x: int
     y: int
     z: int
-    
-    def dot(self, b: "Vector3i"):
+
+    @xgrid.function(method=True)
+    def dot(self, b: "Vector3i") -> int:
         return self.x * b.x + self.y * b.y + self.z * b.z
 
 
@@ -151,7 +152,7 @@ class Vector3i:
 def operator_structure() -> None:
     @xgrid.kernel()
     def aux(a: Vector3i, b: Vector3i) -> int:
-        return a.x * b.x + a.y * b.y + a.z * b.z
+        return a.dot(b)
 
     a = Vector3i(random.randint(0, 1000), random.randint(
         0, 1000), random.randint(0, 1000))
@@ -180,7 +181,7 @@ def operator_grid() -> None:
 def operator_grid_indexguard() -> None:
     @xgrid.kernel()
     def aux(a: xgrid.grid[int, 2]) -> None:
-        a[0, 0] = a[-1, -1][1]
+        a[0, 0] = a[-1, -1][-1]
 
     grid = xgrid.Grid((10, 10), dtype=int)
     aux(grid)

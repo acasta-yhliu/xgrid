@@ -4,7 +4,7 @@ from xgrid.util.typing.annotation import parse_annotation
 from xgrid.util.typing.value import Boolean, Floating, Integer, Structure, Value
 import xgrid.util.typing.reference as ref
 
-from ctypes import c_bool, c_int32, POINTER
+from ctypes import c_int32, POINTER
 
 
 def parse_numpy_dtype(dtype: Value):
