@@ -137,7 +137,7 @@ class Generator:
             space_offsets = ', '.join(
                 f"int32_t space_offset_{i}" for i in range(t.dimension))
             implementation.println(
-                f"inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
+                f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
             with implementation.indent():
                 # TODO: implement boundary check
                 # introduct index check would halt the program if the index is out of range, print an fatal information and return 0, 0, 0 value

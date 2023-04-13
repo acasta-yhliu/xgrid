@@ -142,7 +142,7 @@ class Vector3i:
     x: int
     y: int
     z: int
-
+    
     def dot(self, b: "Vector3i"):
         return self.x * b.x + self.y * b.y + self.z * b.z
 
@@ -173,7 +173,7 @@ def operator_grid() -> None:
     test.log(f"execute grid kernel operator, should give 4 to each elements")
     for a in grid.now:
         for element in a:
-            assert element
+            assert element == 4
 
 
 @test.fact("lang.Operator.grid_indexguard")
