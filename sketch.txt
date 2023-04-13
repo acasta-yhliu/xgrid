@@ -1,4 +1,0 @@
-Python-Kernel -> Application
-
-Python-Kernel -> Platform
-Python-Kernel(params) -> mpi-run app {params}

@@ -189,5 +189,26 @@ def operator_grid_indexguard() -> None:
     test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
 
 
+@test.fact("lang.Operator.grid_dot")
+def operator_grid_dot() -> None:
+    fvec = xgrid.grid[float, 1]
+
+    @xgrid.kernel()
+    def elementwise_mul(result: fvec, a: fvec, b: fvec) -> None:
+        result[0] = a[0] * b[0]
+
+    result = xgrid.Grid((10000, ), float)
+    a = xgrid.Grid((10000, ), float)
+    b = xgrid.Grid((10000, ), float)
+
+    for i in range(10000):
+        a[i] = random.random()
+        b[i] = random.random()
+
+    elementwise_mul(result, a, b)
+
+    assert result.now.sum() == a.now.dot(b.now)
+
+
 xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True)
 test.run()
