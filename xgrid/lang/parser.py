@@ -7,7 +7,7 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, GridInfo, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
+from xgrid.lang.ir.statement import Assignment, Bounary, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
 
 from xgrid.util.logging import Logger
 from xgrid.util.typing import BaseType, Void
@@ -224,8 +224,17 @@ class Parser:
             self.context_stack.append("boundary")
             body = self.visits(node.body)
             self.context_stack.pop()
-            # TODO: handle boundary condition
-            return Bounary()
+
+            args = withitem.context_expr.args
+            if len(args) != 2 or not isinstance(args[0], ast.Name) or not isinstance(args[1], ast.Constant) or type(args[1].value) != int:
+                self.syntax_error(node, f"Invalid pragram switch 'boundary")
+
+            grid = self.resolve_local(args[0])
+            if not isinstance(grid, Identifier) or not isinstance(grid.variable.type, Grid):
+                self.syntax_error(
+                    node, f"Invalid pragma switch 'bounary' with call to '{grid}'")
+
+            return Bounary(self.location(node), grid.variable, args[1].value, body)
         else:
             self.syntax_error(node, f"Unknown pragma switch '{global_obj}'")
 
@@ -460,7 +469,7 @@ class Parser:
 
         if isinstance(node, ast.Subscript):
             def extract_space(grid: ast.Subscript, time_offset: int):
-                if not isinstance(grid.value, ast.Name) or self.context not in ("kernel", "critical"):
+                if not isinstance(grid.value, ast.Name): # or self.context not in ("kernel", "critical", "boundary", "if"):
                     self.syntax_error(
                         grid, f"Incompatible subscript to '{grid.value.__class__.__name__}' under context '{self.context}'")
 

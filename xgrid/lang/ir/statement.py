@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from sys import stdout
+from typing import TextIO
 
 from xgrid.lang.ir import IR, Variable
 from xgrid.lang.ir.expression import Expression, Signature, Terminal
@@ -37,6 +39,11 @@ class Definition(Statement):
         with format.indent():
             format.print(*self.body)
         format.println(kw("end"))
+
+    def show(self, *, indent_size: int = 2, device: TextIO = stdout):
+        format = ElementFormat()
+        self.write(format)
+        format.write(device)
 
 
 @dataclass
@@ -131,3 +138,17 @@ class For(Statement):
                        self.start, plain(":"), self.end, plain(":"), self.step)
         with format.indent():
             format.print(*self.body)
+
+
+@dataclass
+class Bounary(Statement):
+    variable: Variable
+    mask: int
+    body: list[Statement]
+
+    def write(self, format: ElementFormat):
+        format.println(kw("bounary"), plain(
+            "("), self.variable, plain(","), plain(repr(self.mask)), plain(")"), kw("do"))
+        with format.indent():
+            format.print(*self.body)
+        format.println(kw("end"))

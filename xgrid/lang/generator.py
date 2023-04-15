@@ -139,8 +139,6 @@ class Generator:
             implementation.println(
                 f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
             with implementation.indent():
-                # TODO: implement boundary check
-                # introduct index check would halt the program if the index is out of range, print an fatal information and return 0, 0, 0 value
                 if self.config.indexguard:
                     index_out_of_range = ' || '.join(
                         f"space_offset_{i} < 0 || space_offset_{i} >= grid.shape[{i}]" for i in range(t.dimension))

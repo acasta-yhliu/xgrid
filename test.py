@@ -213,5 +213,18 @@ def operator_grid_dot() -> None:
     assert (result.now == a.now * b.now).all()
 
 
+@test.fact("lang.Operator.grid_bounary")
+def operator_grid_boundary() -> None:
+    float2d = xgrid.grid[float, 2]
+
+    @xgrid.kernel()
+    def bounary_test(result: float2d, a: float2d, b: float2d) -> None:
+        result[0, 0] = a[0, 0] * b[0, 0]
+        with xgrid.boundary(result, 1):
+            result[0, 0] = 3.0
+    
+    bounary_test.ir.show()
+
+
 xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True)
 test.run()
