@@ -134,35 +134,22 @@ class Generator:
                     f"{self.format_type(t.element)}* boundary_value;")
             implementation.println("};")
 
-            space_offsets = ', '.join(
-                f"int32_t space_offset_{i}" for i in range(t.dimension))
-            if self.config.indexguard:
-                implementation.println(
-                    f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
-                with implementation.indent():
-                    if self.config.indexguard:
-                        index_out_of_range = ' || '.join(
-                            f"space_offset_{i} < 0 || space_offset_{i} >= grid.shape[{i}]" for i in range(t.dimension))
-                        implementation.println(f"if ({index_out_of_range}) {{")
-                        with implementation.indent():
-                            shape_formatter = repeat_str('%d', t.dimension, ', ')
-                            index_str = ', '.join(
-                                f'space_offset_{i}' for i in range(t.dimension))
-                            shape_str = ', '.join(
-                                f"grid.shape[{i}]" for i in range(t.dimension))
-                            implementation.println(
-                                f"fprintf(stderr, \"index '({shape_formatter})' out of range '({shape_formatter})' in kernel '{self.operator.name}'\\n\", {index_str}, {shape_str});")
-                            # make the program not to stop
-                            implementation.println(f"return &grid.data[0][0];")
-                        implementation.println("}")
-                    implementation.println("int32_t space_offset = 0;")
-                    for i in range(t.dimension):
-                        implementation.println(
-                            f"space_offset += space_offset_{i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
-                    # be assure the index would never be negative
+            implementation.println(
+                f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {', '.join(f'int32_t space_offset_{i}' for i in range(t.dimension))}, int32_t time_offset) {{")
+            with implementation.indent():
+                implementation.println("int32_t space_offset = 0;")
+                for i in range(t.dimension):
+                    if self.config.overstep == "wrap":
+                        space_offset_i = f"((space_offset_{i} + grid.shape[{i}]) % grid.shape[{i}])"
+                    elif self.config.overstep == "limit":
+                        space_offset_i = f"(space_offset_{i} < 0 ? 0 : space_offset_{i} >= grid.shape[{i}] ? grid.shape[{i}] - 1 : space_offset_{i})"
+                    else:
+                        space_offset_i = f"space_offset_{i}"
                     implementation.println(
-                        f"return &grid.data[time_offset][space_offset];")
-                implementation.println("}")
+                        f"space_offset += {space_offset_i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
+                implementation.println(
+                    f"return &grid.data[time_offset][space_offset];")
+            implementation.println("}")
 
     def define_operator(self, operator: Operator):
         if operator.name in self.op_impls:
@@ -386,14 +373,9 @@ class Generator:
 
         self.depth = max(self.depth, abs(ir.time_offset))
 
-        if self.config.indexguard:
-            indexes = ', '.join(
-                f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
-            return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
-        else:
-            id = " + ".join(f"$dim{i} * {'1' if i == 0 else f'{irvar.name}.shape[{i - 1}]'}" for i in range(
-                irvar.type.dimension))
-            return f"{irvar.name}.data[{ir.time_offset}][{id}]"
+        indexes = ', '.join(
+            f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
+        return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
 
     def visit_GridInfo(self, ir: expr.GridInfo, implementation: LineFormat):
         assert isinstance(ir.variable.type, Grid)

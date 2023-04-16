@@ -10,6 +10,8 @@ from xgrid.util.console import Console
 from xgrid.util.ffi import Compiler, Library
 from xgrid.util.logging import Logger
 from xgrid.util.typing.value import Floating
+import matplotlib.pyplot as plt
+import matplotlib.animation as ani
 
 
 class Test:
@@ -186,31 +188,7 @@ def operator_grid_indexguard() -> None:
     grid = xgrid.Grid((10, 10), dtype=int)
     aux(grid)
 
-    test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
-
-
-@test.fact("lang.Operator.grid_dot")
-def operator_grid_dot() -> None:
-    fmat = xgrid.grid[float, 2]
-
-    @xgrid.kernel()
-    def elementwise_mul(result: fmat, a: fmat, b: fmat) -> int:
-        result[0, 0] = a[0, 0] * b[0, 0]
-        return xgrid.shape(result, 0)
-
-    SIZE = 100
-
-    result = xgrid.Grid((SIZE, SIZE), float)
-    a = xgrid.Grid((SIZE, SIZE), float)
-    b = xgrid.Grid((SIZE, SIZE), float)
-
-    for i in range(SIZE):
-        for j in range(SIZE):
-            a[i, j] = random.random()
-            b[i, j] = random.random()
-
-    assert elementwise_mul(result, a, b) == SIZE
-    assert (result.now == a.now * b.now).all()
+    test.log(f"execute grid kernel operator with index out of range, the program should run smoothly without error message")
 
 
 @test.fact("lang.Operator.grid_bounary")
@@ -218,13 +196,38 @@ def operator_grid_boundary() -> None:
     float2d = xgrid.grid[float, 2]
 
     @xgrid.kernel()
-    def bounary_test(result: float2d, a: float2d, b: float2d) -> None:
-        result[0, 0] = a[0, 0] * b[0, 0]
-        with xgrid.boundary(result, 1):
-            result[0, 0] = 3.0
-    
+    def blur(a: float2d) -> None:
+        a[0, 0] = (a[1, 0] + a[0, 1] + a[-1, 0] + a[0, -1] +
+                   a[1, -1] + a[-1, 1] + a[1, 1] + a[-1, -1] + a[0, 0]) / 9.0
+
     # print(bounary_test.src)
 
+    SIZE = 200
+    test_grid = xgrid.Grid((SIZE, SIZE), float)
 
-xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True, opt_level=2)
+    for i in range(SIZE):
+        for j in range(SIZE):
+            test_grid[i, j] = random.random() * 100
+
+    # plotting
+    fig, ax = plt.subplots()
+    imgs = []
+
+    FRAMES = 200
+
+    begin_time = time.time()
+    for i in range(0, FRAMES):
+        imgs.append([ax.imshow(test_grid.now)])
+        blur(test_grid)
+    end_time = time.time()
+    test.log(
+        f"invoked {FRAMES} {blur.name} kernel ({SIZE} x {SIZE}) in totally {(end_time - begin_time):.6f}s")
+
+    filename = "blur.gif"
+    test.log(f"exporting gif image file to {filename}")
+    ani.ArtistAnimation(fig, imgs, interval=50, repeat_delay=1000).save(
+        filename, writer="pillow")
+
+
+xgrid.init(comment=True, cacheroot=".xgridtest", opt_level=2, overstep="wrap")
 test.run()

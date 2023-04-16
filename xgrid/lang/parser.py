@@ -530,8 +530,8 @@ class Parser:
                         node.value, f"Invalid time dimension subscript to '{node.value.__class__.__name__}")
                 node = node.value
             else:
-                time_offset = 0
-
+                time_offset = 0 if context(node.ctx) == "store" else -1
+ 
             return extract_space(node, time_offset)
 
         elif isinstance(node, ast.Attribute):

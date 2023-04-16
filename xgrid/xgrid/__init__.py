@@ -41,13 +41,17 @@ class Grid:
         self._boundary_mask = np.zeros(shape=shape, dtype=np.int32)
         self._boundary_value = np.zeros(shape=shape, dtype=self.numpy_dtype)
 
-    def _op_invoke(self, depth: int):
+    def _extend_time(self, depth: int):
         while len(self._data) < depth:
             self._data.append(
                 np.zeros(shape=self.shape, dtype=self.numpy_dtype))
         self._data = self._data[:depth]
 
-        np.roll(self._data, 1)
+    def _op_invoke(self, depth: int):
+        self._extend_time(depth)
+
+        last = self._data.pop()
+        self._data.insert(0, last)
 
     @property
     def dimension(self):
@@ -68,6 +72,14 @@ class Grid:
     @property
     def now(self):
         return self._data[0]
+
+    def fill(self, data: np.ndarray, time: int = 0):
+        if data.shape != self.now.shape or data.dtype != self.now.dtype:
+            self.logger.dead(
+                f"Unable to fill grid with incompatible shape or data type")
+
+        self._extend_time(abs(time))
+        self._data[time] = data.copy()
 
     def __getitem__(self, slice):
         return self.now[slice]
