@@ -136,32 +136,33 @@ class Generator:
 
             space_offsets = ', '.join(
                 f"int32_t space_offset_{i}" for i in range(t.dimension))
-            implementation.println(
-                f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
-            with implementation.indent():
-                if self.config.indexguard:
-                    index_out_of_range = ' || '.join(
-                        f"space_offset_{i} < 0 || space_offset_{i} >= grid.shape[{i}]" for i in range(t.dimension))
-                    implementation.println(f"if ({index_out_of_range}) {{")
-                    with implementation.indent():
-                        shape_formatter = repeat_str('%d', t.dimension, ', ')
-                        index_str = ', '.join(
-                            f'space_offset_{i}' for i in range(t.dimension))
-                        shape_str = ', '.join(
-                            f"grid.shape[{i}]" for i in range(t.dimension))
-                        implementation.println(
-                            f"fprintf(stderr, \"index '({shape_formatter})' out of range '({shape_formatter})' in kernel '{self.operator.name}'\\n\", {index_str}, {shape_str});")
-                        # make the program not to stop
-                        implementation.println(f"return &grid.data[0][0];")
-                    implementation.println("}")
-                implementation.println("int32_t space_offset = 0;")
-                for i in range(t.dimension):
-                    implementation.println(
-                        f"space_offset += space_offset_{i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
-                # be assure the index would never be negative
+            if self.config.indexguard:
                 implementation.println(
-                    f"return &grid.data[time_offset][space_offset];")
-            implementation.println("}")
+                    f"static inline {self.format_type(t.element)}* {name}_at(struct {name} grid, {space_offsets}, int32_t time_offset) {{")
+                with implementation.indent():
+                    if self.config.indexguard:
+                        index_out_of_range = ' || '.join(
+                            f"space_offset_{i} < 0 || space_offset_{i} >= grid.shape[{i}]" for i in range(t.dimension))
+                        implementation.println(f"if ({index_out_of_range}) {{")
+                        with implementation.indent():
+                            shape_formatter = repeat_str('%d', t.dimension, ', ')
+                            index_str = ', '.join(
+                                f'space_offset_{i}' for i in range(t.dimension))
+                            shape_str = ', '.join(
+                                f"grid.shape[{i}]" for i in range(t.dimension))
+                            implementation.println(
+                                f"fprintf(stderr, \"index '({shape_formatter})' out of range '({shape_formatter})' in kernel '{self.operator.name}'\\n\", {index_str}, {shape_str});")
+                            # make the program not to stop
+                            implementation.println(f"return &grid.data[0][0];")
+                        implementation.println("}")
+                    implementation.println("int32_t space_offset = 0;")
+                    for i in range(t.dimension):
+                        implementation.println(
+                            f"space_offset += space_offset_{i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
+                    # be assure the index would never be negative
+                    implementation.println(
+                        f"return &grid.data[time_offset][space_offset];")
+                implementation.println("}")
 
     def define_operator(self, operator: Operator):
         if operator.name in self.op_impls:
@@ -263,6 +264,10 @@ class Generator:
         else:
             gname, gdim = "", 0
 
+        inside_boundary_handler = getattr(self, "__boundary_handler", False)
+        if inside_boundary_handler:
+            gdim = 0
+
         if self.config.parallel and gdim != 0:
             implementation.println(
                 f"#pragma omp parallel for collapse({gdim})", indent=False)
@@ -291,6 +296,41 @@ class Generator:
 
     def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
         implementation.println(ir.source)
+
+    def visit_Bounary(self, ir: stat.Bounary, implementation: LineFormat):
+        assert isinstance(ir.variable.type, Grid)
+
+        gdim = ir.variable.type.dimension
+        gname = ir.variable.name
+
+        assert gdim != 0
+
+        if self.config.parallel:
+            implementation.println(
+                f"#pragma omp parallel for collapse({gdim})", indent=False)
+
+        for i in range(gdim):
+            implementation.println(
+                f"for (int32_t $dim{i} = 0; $dim{i} < {gname}.shape[{i}]; $dim{i}++) {{")
+            implementation.force_indent()
+
+        id = " + ".join(
+            f"$dim{i} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
+        implementation.println(f"if ({gname}.boundary_mask[{id}]) {{")
+        implementation.force_indent()
+
+        implementation.println(
+            f"{self.format_type(ir.variable.type.element)} value = {gname}.bounary_value[{id}];")
+        setattr(self, "__boundary_handler", True)
+        self.visits(ir.body, implementation)
+        delattr(self, "__boundary_handler")
+
+        implementation.force_dedent()
+        implementation.println("}")
+
+        for i in range(gdim):
+            implementation.force_dedent()
+            implementation.println("}")
 
     # ===== expression =====
     def visit_Binary(self, ir: expr.Binary, implementation: LineFormat):
@@ -346,9 +386,14 @@ class Generator:
 
         self.depth = max(self.depth, abs(ir.time_offset))
 
-        indexes = ', '.join(
-            f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
-        return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
+        if self.config.indexguard:
+            indexes = ', '.join(
+                f"$dim{i} + {ir.space_offset[i]}" for i in range(irvar.type.dimension))
+            return f"(*{self.format_type(irvar.type, True)}_at({ir.variable.name}, {indexes}, {abs(ir.time_offset)}))"
+        else:
+            id = " + ".join(f"$dim{i} * {'1' if i == 0 else f'{irvar.name}.shape[{i - 1}]'}" for i in range(
+                irvar.type.dimension))
+            return f"{irvar.name}.data[{ir.time_offset}][{id}]"
 
     def visit_GridInfo(self, ir: expr.GridInfo, implementation: LineFormat):
         assert isinstance(ir.variable.type, Grid)

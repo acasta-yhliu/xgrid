@@ -52,6 +52,11 @@ class Operator:
             self._ir = parser.result
             self.includes.extend(parser.includes)
         return self._ir
+    
+    @property
+    def src(self) -> str:
+        from xgrid.lang.generator import Generator
+        return Generator(self).source
 
     @property
     def signature(self):
