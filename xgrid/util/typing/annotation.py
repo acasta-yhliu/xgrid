@@ -1,6 +1,7 @@
 from dataclasses import fields, is_dataclass
 import struct
 from typing import Any, Generic, TypeVar, get_args, get_origin
+from xgrid.util.init import get_config
 
 from xgrid.util.typing import BaseType, Ignore, Void
 import xgrid.util.typing.value as val
@@ -38,7 +39,7 @@ def parse_annotation(annotation, glbs=globals()) -> BaseType | None:
         return Ignore()
 
     if annotation in (int, float, bool):
-        return {int: val.Integer(struct.calcsize("i")), float: val.Floating(struct.calcsize("f")), bool: val.Boolean()}[annotation]
+        return {int: val.Integer(struct.calcsize("i")), float: val.Floating(get_config().fsize), bool: val.Boolean()}[annotation]
 
     if is_dataclass(annotation) and isinstance(annotation, type):
         elements = []

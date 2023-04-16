@@ -7,7 +7,8 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, GridInfo, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Assignment, Bounary, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
+from xgrid.lang.ir.statement import Assignment, Boundary, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
+from xgrid.util.init import get_config
 
 from xgrid.util.logging import Logger
 from xgrid.util.typing import BaseType, Void
@@ -234,7 +235,7 @@ class Parser:
                 self.syntax_error(
                     node, f"Invalid pragma switch 'bounary' with call to '{grid}'")
 
-            return Bounary(self.location(node), grid.variable, args[1].value, body)
+            return Boundary(self.location(node), grid.variable, args[1].value, body)
         else:
             self.syntax_error(node, f"Unknown pragma switch '{global_obj}'")
 
@@ -349,7 +350,7 @@ class Parser:
 
     # ===== expressions =====
     def parse_constant(self, node: ast.AST, constant):
-        vtype = {int: Integer(calcsize("i")), float: Floating(calcsize("f")),
+        vtype = {int: Integer(calcsize("i")), float: Floating(get_config().fsize),
                  bool: Boolean()}
         if type(constant) not in vtype:
             self.syntax_error(
@@ -387,8 +388,8 @@ class Parser:
                 node, f"Incompatible binary operator '{binary_op.value}' with type '{left.type}' and '{right.type}'")
 
         if binary_op == BinaryOperator.Pow:
-            return_type = Floating(64) if isinstance(
-                left.type, Floating) and left.type.width_bits == 64 else Floating(32)
+            return_type = Floating(calcsize("d")) if isinstance(
+                left.type, Floating) and left.type.width_bits == 64 else Floating(get_config().fsize)
         else:
             return_type = left.type
 

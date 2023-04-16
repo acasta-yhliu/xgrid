@@ -15,6 +15,7 @@ class Configuration:
     comment: bool
     overstep: Literal["limit", "wrap"]
     opt_level: Literal[0, 1, 2, 3]
+    precision: Literal["float", "double"]
 
     def __repr__(self) -> str:
         return repr(asdict(self))
@@ -28,7 +29,13 @@ class Configuration:
 
         flags.append(f"-O{self.opt_level}")
 
+        flags.append(f"-lm")
+
         return flags
+
+    @property
+    def fsize(self):
+        return 4 if self.precision == "float" else 8
 
 
 _config: Configuration | None = None
@@ -40,7 +47,7 @@ def get_config() -> Configuration:
     return _config
 
 
-def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, overstep: Literal["limit", "wrap"] = "wrap", opt_level: Literal[0, 1, 2, 3] = 2) -> None:
+def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, overstep: Literal["limit", "wrap"] = "wrap", opt_level: Literal[0, 1, 2, 3] = 2, precision: Literal["float", "double"] = "float") -> None:
     global _config
 
     if sys.version_info < (3, 10):
@@ -57,6 +64,6 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: 
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
     _config = Configuration(parallel, cc, cacheroot,
-                            comment, overstep, opt_level)
+                            comment, overstep, opt_level, precision)
 
     logger.info(f"initialized with configuration: {_config}")

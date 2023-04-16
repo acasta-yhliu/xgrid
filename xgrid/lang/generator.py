@@ -126,12 +126,11 @@ class Generator:
             implementation.println("};")
         elif isinstance(t, Grid):
             with implementation.indent():
+                implementation.println("int32_t time;")
                 implementation.println(f"int32_t shape[{t.dimension}];")
                 implementation.println(
                     f"{self.format_type(t.element)}** data;")
                 implementation.println("int32_t* boundary_mask;")
-                implementation.println(
-                    f"{self.format_type(t.element)}* boundary_value;")
             implementation.println("};")
 
             implementation.println(
@@ -149,6 +148,16 @@ class Generator:
                         f"space_offset += {space_offset_i} * {'1' if i == 0 else f'grid.shape[{i - 1}]'};")
                 implementation.println(
                     f"return &grid.data[time_offset][space_offset];")
+            implementation.println("}")
+
+            implementation.println(f"static inline void {name}_tick(struct {name} grid) {{")
+            with implementation.indent():
+                implementation.println(f"{self.format_type(t.element)}* now = grid.data[0];")
+                implementation.println("for (int32_t i = 1; i < grid.time; ++i) {")
+                with implementation.indent():
+                    implementation.println("grid.data[i - 1] = grid.data[i];")
+                implementation.println("}")
+                implementation.println("grid.data[grid.time] = now;")
             implementation.println("}")
 
     def define_operator(self, operator: Operator):
@@ -267,7 +276,7 @@ class Generator:
         if gdim != 0:
             id = " + ".join(
                 f"$dim{i} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
-            implementation.println(f"if (!{gname}.boundary_mask[{id}]) {{")
+            implementation.println(f"if ({gname}.boundary_mask[{id}] == 0) {{")
             implementation.force_indent()
 
         implementation.println(
@@ -284,7 +293,7 @@ class Generator:
     def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
         implementation.println(ir.source)
 
-    def visit_Bounary(self, ir: stat.Bounary, implementation: LineFormat):
+    def visit_Boundary(self, ir: stat.Boundary, implementation: LineFormat):
         assert isinstance(ir.variable.type, Grid)
 
         gdim = ir.variable.type.dimension
@@ -303,11 +312,9 @@ class Generator:
 
         id = " + ".join(
             f"$dim{i} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
-        implementation.println(f"if ({gname}.boundary_mask[{id}]) {{")
+        implementation.println(f"if ({gname}.boundary_mask[{id}] != 0) {{")
         implementation.force_indent()
 
-        implementation.println(
-            f"{self.format_type(ir.variable.type.element)} value = {gname}.bounary_value[{id}];")
         setattr(self, "__boundary_handler", True)
         self.visits(ir.body, implementation)
         delattr(self, "__boundary_handler")
@@ -318,6 +325,13 @@ class Generator:
         for i in range(gdim):
             implementation.force_dedent()
             implementation.println("}")
+
+    def visit_For(self, ir: stat.For, implementation: LineFormat):
+        implementation.println(
+            f"for ({ir.variable.name} = {self.visit(ir.start, implementation)}; {ir.variable.name} < {self.visit(ir.end, implementation)}; {ir.variable.name} += {self.visit(ir.step, implementation)}) {{")
+        with implementation.indent():
+            self.visits(ir.body, implementation)
+        implementation.println("}")
 
     # ===== expression =====
     def visit_Binary(self, ir: expr.Binary, implementation: LineFormat):
@@ -361,8 +375,15 @@ class Generator:
         if isinstance(ir.operator, expr.Constructor):
             return f"(({self.format_type(ir.operator.type)}) {{{args}}})"
         else:
-            self.define_operator(ir.operator)
-            return f"{ir.operator.name}({args})"
+            if ir.operator.mode == "external" and ir.operator.name == "tick":
+                grid = ir.arguments[0]
+                assert isinstance(grid, expr.Identifier)
+                assert isinstance(grid.variable.type, Grid)
+
+                return f"{self.format_type(grid.variable.type, True)}_tick({grid.variable.name})"
+            else:
+                self.define_operator(ir.operator)
+                return f"{ir.operator.name}({args})"
 
     def visit_Cast(self, ir: expr.Cast, implementation: LineFormat):
         return f"(({self.format_type(ir.type)})({self.visit(ir.value, implementation)}))"

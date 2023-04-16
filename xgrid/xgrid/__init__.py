@@ -38,8 +38,7 @@ class Grid:
         self._data = [np.zeros(shape=shape, dtype=self.numpy_dtype)]
 
         # boundary condition
-        self._boundary_mask = np.zeros(shape=shape, dtype=np.int32)
-        self._boundary_value = np.zeros(shape=shape, dtype=self.numpy_dtype)
+        self.boundary = np.zeros(shape=shape, dtype=np.int32)
 
     def _extend_time(self, depth: int):
         while len(self._data) < depth:
@@ -58,16 +57,14 @@ class Grid:
         return len(self.shape)
 
     def serialize(self):
-        boundary_mask = self._boundary_mask.ctypes.data_as(POINTER(c_int32))
-        boundary_value = self._boundary_value.ctypes.data_as(
-            POINTER(self.element.ctype))
+        boundary_mask = self.boundary.ctypes.data_as(POINTER(c_int32))
         data = (POINTER(self.element.ctype) * len(self._data))(*
                                                                [data.ctypes.data_as(POINTER(self.element.ctype)) for data in self._data])
 
-        return self.typing.ctype((c_int32 * self.dimension)(*self.shape),
+        return self.typing.ctype(len(self._data),
+                                 (c_int32 * self.dimension)(*self.shape),
                                  data,
-                                 boundary_mask,
-                                 boundary_value)
+                                 boundary_mask)
 
     @property
     def now(self):

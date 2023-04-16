@@ -141,7 +141,7 @@ class For(Statement):
 
 
 @dataclass
-class Bounary(Statement):
+class Boundary(Statement):
     variable: Variable
     mask: int
     body: list[Statement]
