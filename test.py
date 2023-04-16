@@ -177,16 +177,16 @@ def operator_grid() -> None:
             assert element == 4
 
 
-# @test.fact("lang.Operator.grid_indexguard")
-# def operator_grid_indexguard() -> None:
-#     @xgrid.kernel()
-#     def aux(a: xgrid.grid[int, 2]) -> None:
-#         a[0, 0] = a[-1, -1][-1]
+@test.fact("lang.Operator.grid_indexguard")
+def operator_grid_indexguard() -> None:
+    @xgrid.kernel()
+    def aux(a: xgrid.grid[int, 2]) -> None:
+        a[0, 0] = a[-1, -1][-1]
 
-#     grid = xgrid.Grid((10, 10), dtype=int)
-#     aux(grid)
+    grid = xgrid.Grid((10, 10), dtype=int)
+    aux(grid)
 
-#     test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
+    test.log(f"execute grid kernel operator with index out of range, the program should run smoothly but with error message")
 
 
 @test.fact("lang.Operator.grid_dot")
@@ -223,8 +223,8 @@ def operator_grid_boundary() -> None:
         with xgrid.boundary(result, 1):
             result[0, 0] = 3.0
     
-    print(bounary_test.src)
+    # print(bounary_test.src)
 
 
-xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=False, opt_level=3)
+xgrid.init(comment=True, cacheroot=".xgridtest", indexguard=True, opt_level=2)
 test.run()
