@@ -168,7 +168,7 @@ def operator_structure() -> None:
 @test.fact("lang.Operator.grid")
 def operator_grid() -> None:
     @xgrid.kernel()
-    def aux(a: xgrid.grid[int, 2]) -> None:
+    def aux(a: xgrid.grid[int, 2]) -> None: # type: ignore
         a[0, 0] = 4
 
     grid = xgrid.Grid((10, 10), dtype=int)
@@ -183,7 +183,7 @@ def operator_grid() -> None:
 @test.fact("lang.Operator.grid_indexguard")
 def operator_grid_indexguard() -> None:
     @xgrid.kernel()
-    def aux(a: xgrid.grid[int, 2]) -> None:
+    def aux(a: xgrid.grid[int, 2]) -> None: # type: ignore
         a[0, 0] = a[-1, -1][-1]
 
     grid = xgrid.Grid((10, 10), dtype=int)
@@ -200,7 +200,7 @@ def initial_convection_1d(x: xgrid.Grid, dx):
 
 @test.fact("lang.Operator.convection_1d")
 def operator_convection_1d() -> None:
-    float1d = xgrid.grid[float, 1]
+    float1d = xgrid.grid[float, 1] # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -227,7 +227,7 @@ def operator_convection_1d() -> None:
 
 @test.fact("lang.Operator.convection_1d_nonlinear")
 def operator_convection_1d_nonlinear() -> None:
-    float1d = xgrid.grid[float, 1]
+    float1d = xgrid.grid[float, 1] # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -253,7 +253,7 @@ def operator_convection_1d_nonlinear() -> None:
 
 @test.fact("lang.Operator.diffusion_1d")
 def operator_diffusion() -> None:
-    float1d = xgrid.grid[float, 1]
+    float1d = xgrid.grid[float, 1] # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -282,7 +282,7 @@ def operator_diffusion() -> None:
 
 @test.fact("lang.Operator.convection_2d")
 def operator_convection_2d() -> None:
-    float2d = xgrid.grid[float, 2]
+    float2d = xgrid.grid[float, 2] # type: ignore
 
     nx = ny = 201
     dx = 2 / (nx-1)
