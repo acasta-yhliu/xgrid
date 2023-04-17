@@ -11,7 +11,7 @@ CustomTypecheck = Callable[[list[BaseType]], BaseType]
 
 
 class Operator:
-    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None, typecheck_override: CustomTypecheck | None = None) -> None:
+    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None, typecheck_override: CustomTypecheck | None = None, tick: bool = True) -> None:
         self.func = func
         self.mode = mode
 
@@ -23,6 +23,7 @@ class Operator:
         self.native = None
         self.self_type = self_type
         self.typecheck_override = typecheck_override
+        self.tick = tick
 
     def __call__(self, *args: Any) -> Any:
         if self.mode == "kernel":
@@ -34,11 +35,10 @@ class Operator:
             # tick the field and resize the time step if necessary
             for arg in args:
                 if isinstance(arg, XGrid):
-                    arg._op_invoke(self.depth)
+                    arg._op_invoke(self.depth, self.tick)
 
             return self.native(*args)
         elif self.mode == "function":
-            print(*args)
             return self.func(*args)
         else:
             self.logger.dead(
@@ -63,9 +63,9 @@ class Operator:
         return self.ir.signature
 
 
-def kernel(*, name: str | None = None, includes: list[str] | None = None):
+def kernel(*, name: str | None = None, includes: list[str] | None = None, tick: bool = True):
     def aux(func):
-        return Operator(func, "kernel", name, includes)
+        return Operator(func, "kernel", name, includes, tick=tick)
     return aux
 
 

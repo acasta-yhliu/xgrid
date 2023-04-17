@@ -13,7 +13,7 @@ class Configuration:
     cc: list[str]
     cacheroot: str
     comment: bool
-    overstep: Literal["limit", "wrap"]
+    overstep: Literal["none", "limit", "wrap"]
     opt_level: Literal[0, 1, 2, 3]
     precision: Literal["float", "double"]
 
@@ -47,7 +47,7 @@ def get_config() -> Configuration:
     return _config
 
 
-def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, overstep: Literal["limit", "wrap"] = "wrap", opt_level: Literal[0, 1, 2, 3] = 2, precision: Literal["float", "double"] = "float") -> None:
+def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: str = ".xgrid", comment: bool = False, overstep: Literal["none", "limit", "wrap"] = "none", opt_level: Literal[0, 1, 2, 3] = 2, precision: Literal["float", "double"] = "float") -> None:
     global _config
 
     if sys.version_info < (3, 10):

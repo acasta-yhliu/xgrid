@@ -288,7 +288,7 @@ def operator_convection_2d() -> None:
     dx = 2 / (nx-1)
     dy = 2 / (ny-1)
     c = 1
-    sigma = .05  # from the CLF condition
+    sigma = .5  # from the CLF condition
     dt = sigma * (dx / c)
     nt = int(.7/dt)
 

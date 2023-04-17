@@ -46,11 +46,12 @@ class Grid:
                 np.zeros(shape=self.shape, dtype=self.numpy_dtype))
         self._data = self._data[:depth]
 
-    def _op_invoke(self, depth: int):
+    def _op_invoke(self, depth: int, tick: bool):
         self._extend_time(depth)
 
-        last = self._data.pop()
-        self._data.insert(0, last)
+        if tick:
+            last = self._data.pop()
+            self._data.insert(0, last)
 
     @property
     def dimension(self):
