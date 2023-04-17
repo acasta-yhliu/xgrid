@@ -312,7 +312,7 @@ class Generator:
 
         id = " + ".join(
             f"$dim{i} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
-        implementation.println(f"if ({gname}.boundary_mask[{id}] != 0) {{")
+        implementation.println(f"if ({gname}.boundary_mask[{id}] == {ir.mask}) {{")
         implementation.force_indent()
 
         setattr(self, "__boundary_handler", True)

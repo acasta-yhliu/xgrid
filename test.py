@@ -168,7 +168,7 @@ def operator_structure() -> None:
 @test.fact("lang.Operator.grid")
 def operator_grid() -> None:
     @xgrid.kernel()
-    def aux(a: xgrid.grid[int, 2]) -> None: # type: ignore
+    def aux(a: xgrid.grid[int, 2]) -> None:  # type: ignore
         a[0, 0] = 4
 
     grid = xgrid.Grid((10, 10), dtype=int)
@@ -183,7 +183,7 @@ def operator_grid() -> None:
 @test.fact("lang.Operator.grid_indexguard")
 def operator_grid_indexguard() -> None:
     @xgrid.kernel()
-    def aux(a: xgrid.grid[int, 2]) -> None: # type: ignore
+    def aux(a: xgrid.grid[int, 2]) -> None:  # type: ignore
         a[0, 0] = a[-1, -1][-1]
 
     grid = xgrid.Grid((10, 10), dtype=int)
@@ -200,7 +200,7 @@ def initial_convection_1d(x: xgrid.Grid, dx):
 
 @test.fact("lang.Operator.convection_1d")
 def operator_convection_1d() -> None:
-    float1d = xgrid.grid[float, 1] # type: ignore
+    float1d = xgrid.grid[float, 1]  # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -221,13 +221,13 @@ def operator_convection_1d() -> None:
         convection_1d(u, c, dt, dx)
 
     pyplot.plot(numpy.linspace(0, 2, nx), u.now)
-    pyplot.savefig(f"convection_1d.png")
+    pyplot.savefig(f"imgs/convection_1d.png")
     pyplot.close()
 
 
 @test.fact("lang.Operator.convection_1d_nonlinear")
 def operator_convection_1d_nonlinear() -> None:
-    float1d = xgrid.grid[float, 1] # type: ignore
+    float1d = xgrid.grid[float, 1]  # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -247,13 +247,13 @@ def operator_convection_1d_nonlinear() -> None:
         convection_1d(u, dt, dx)
 
     pyplot.plot(numpy.linspace(0, 2, nx), u.now)
-    pyplot.savefig(f"convection_1d_nonlinear.png")
+    pyplot.savefig(f"imgs/convection_1d_nonlinear.png")
     pyplot.close()
 
 
 @test.fact("lang.Operator.diffusion_1d")
 def operator_diffusion() -> None:
-    float1d = xgrid.grid[float, 1] # type: ignore
+    float1d = xgrid.grid[float, 1]  # type: ignore
 
     nx = 41
     dx = 2 / (nx - 1)
@@ -276,20 +276,20 @@ def operator_diffusion() -> None:
         diffusion_1d(u, nu, dt, dx)
 
     pyplot.plot(numpy.linspace(0, 2, nx), u.now)
-    pyplot.savefig(f"diffusion_1d.png")
+    pyplot.savefig(f"imgs/diffusion_1d.png")
     pyplot.close()
 
 
 @test.fact("lang.Operator.convection_2d")
 def operator_convection_2d() -> None:
-    float2d = xgrid.grid[float, 2] # type: ignore
+    float2d = xgrid.grid[float, 2]  # type: ignore
 
-    nx = ny = 201
+    nx = ny = 101
     dx = 2 / (nx-1)
     dy = 2 / (ny-1)
     c = 1
-    sigma = .5  # from the CLF condition
-    dt = sigma * (dx / c) * 0.1
+    sigma = .05  # from the CLF condition
+    dt = sigma * (dx / c)
     nt = int(.7/dt)
 
     u = xgrid.Grid((nx, ny), float)
@@ -310,121 +310,8 @@ def operator_convection_2d() -> None:
         convection_2d(u, c, dt, dx, dy)
 
     pyplot.imshow(u.now)
-    pyplot.savefig("convection_2d.png")
+    pyplot.savefig("imgs/convection_2d.png")
     pyplot.close()
-
-# @test.fact("lang.Operator.cavity_flow")
-# def operator_cavity_flow() -> None:
-#     float2d = xgrid.grid[float, 2]
-
-#     @xgrid.kernel()
-#     def cavity(u: float2d, v: float2d, p: float2d, b: float2d, rho: float, nu: float, dt: float, dx: float, dy: float) -> None:
-#         b[0, 0] = (rho * (1.0 / dt *
-#                           ((u[0, 1] - u[0, -1]) /
-#                            (2.0 * dx) + (v[1, 0] - v[-1, 0]) / (2.0 * dy)) -
-#                           ((u[0, 1] - u[0, -1]) / (2.0 * dx))**2.0 -
-#                           2.0 * ((u[1, 0] - u[-1, 0]) / (2.0 * dy) *
-#                                  (v[0, 1] - v[0, -1]) / (2.0 * dx)) -
-#                           ((v[1, 0] - v[-1, 0]) / (2.0 * dy))**2.0))
-
-#         for _ in range(0, 50):
-#             p[0, 0] = (((p[0, 1] + p[0, -1]) * dy**2.0 +
-#                         (p[1, 0] + p[-1, 0]) * dx**2.0) /
-#                        (2.0 * (dx**2.0 + dy**2.0)) -
-#                        dx**2.0 * dy**2.0 / (2.0 * (dx**2.0 + dy**2.0)) *
-#                        b[0, 0][0])
-
-#             with xgrid.boundary(p, 1):
-#                 p[0, 0] = p[0, -1][0]  # dp/dx = 0 at x = 2
-#             with xgrid.boundary(p, 2):
-#                 p[0, 0] = p[1, 0][0]   # dp/dy = 0 at y = 0
-#             with xgrid.boundary(p, 3):
-#                 p[0, 0] = p[0, 1][0]   # dp/dx = 0 at x = 0
-#             with xgrid.boundary(p, 4):
-#                 p[0, 0] = 0.0
-
-#             xgrid.tick(p)
-
-#         xgrid.tick(p)
-
-#         u[0, 0] = (u[0, 0] -
-#                    u[0, 0] * dt / dx *
-#                    (u[0, 0] - u[0, -1]) -
-#                    v[0, 0] * dt / dy *
-#                    (u[0, 0] - u[-1, 0]) -
-#                    dt / (2.0 * rho * dx) * (p[0, 1][0] - p[0, -1][0]) +
-#                    nu * (dt / dx**2.0 *
-#                          (u[0, 1] - 2.0 * u[0, 0] + u[0, -1]) +
-#                          dt / dy**2.0 *
-#                          (u[1, 0] - 2.0 * u[0, 0] + u[-1, 0])))
-
-#         v[0, 0] = (v[0, 0] -
-#                    u[0, 0] * dt / dx *
-#                    (v[0, 0] - v[0, -1]) -
-#                    v[0, 0] * dt / dy *
-#                    (v[0, 0] - v[-1, 0]) -
-#                    dt / (2.0 * rho * dy) * (p[1, 0][0] - p[-1, 0][0]) +
-#                    nu * (dt / dx**2.0 *
-#                          (v[0, 1] - 2.0 * v[0, 0] + v[0, -1]) +
-#                          dt / dy**2.0 *
-#                          (v[1, 0] - 2.0 * v[0, 0] + v[-1, 0])))
-
-#         with xgrid.boundary(u, 1):
-#             u[0, 0] = 0.0
-
-#         with xgrid.boundary(u, 2):
-#             u[0, 0] = 1.0
-
-#         with xgrid.boundary(v, 1):
-#             v[0, 0] = 0.0
-
-#     FRAMES = 100
-
-#     SIZE_X = SIZE_Y = 41
-
-#     u = xgrid.Grid((SIZE_X, SIZE_Y), float)
-#     v = xgrid.Grid((SIZE_X, SIZE_Y), float)
-#     p = xgrid.Grid((SIZE_X, SIZE_Y), float)
-#     b = xgrid.Grid((SIZE_X, SIZE_Y), float)
-
-#     u.boundary[0, :] = 1
-#     u.boundary[:, 0] = 1
-#     u.boundary[:, -1] = 1
-#     u.boundary[-1, :] = 2
-
-#     v.boundary[0, :] = 1
-#     v.boundary[-1, :] = 1
-#     v.boundary[:, 0] = 1
-#     v.boundary[:, -1] = 1
-
-#     p.boundary[:, -1] = 1
-#     p.boundary[0, :] = 2
-#     p.boundary[:, 0] = 3
-#     p.boundary[-1, :] = 4
-
-#     b.boundary[0, :] = 1
-#     b.boundary[-1, :] = 1
-#     b.boundary[:, 0] = 1
-#     b.boundary[:, -1] = 1
-
-#     for _ in range(FRAMES):
-#         cavity(u, v, p, b, 1.0, 0.1, 0.001,
-#                2 / (SIZE_X - 1), 2 / (SIZE_Y - 1))
-
-#     x = numpy.linspace(0, 2, SIZE_X)
-#     y = numpy.linspace(0, 2, SIZE_Y)
-#     X, Y = numpy.meshgrid(x, y)
-
-#     pyplot.contourf(X, Y, p.now, alpha=0.5)
-#     pyplot.colorbar()
-#     pyplot.contour(X, Y, p.now)
-#     pyplot.streamplot(X, Y, u.now, v.now)
-#     pyplot.xlabel('X')
-#     pyplot.ylabel('Y')
-
-#     filename = "cavity.png"
-#     test.log(f"exporting png image file to {filename}")
-#     pyplot.savefig(filename)
 
 
 xgrid.init(comment=True, cacheroot=".xgridtest",
