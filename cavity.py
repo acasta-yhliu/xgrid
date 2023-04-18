@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-import random
+import tqdm
 import xgrid
-import matplotlib.pyplot as pyplot
+from matplotlib import pyplot, animation
 import numpy
 
-xgrid.init(cacheroot=".xgridtest", parallel=False, precision="double")
+xgrid.init(cacheroot=".xgridtest", parallel=True, precision="float")
 
-float2d = xgrid.grid[float, 2]
+float2d = xgrid.grid[float, 2]  # type: ignore
 
 
 @dataclass
@@ -18,18 +18,13 @@ class Config:
     dy: float
 
 
-SIZE_X = SIZE_Y = 41
+SIZE_X = SIZE_Y = 51
 
 u = xgrid.Grid((SIZE_X, SIZE_Y), float)
 v = xgrid.Grid((SIZE_X, SIZE_Y), float)
 p = xgrid.Grid((SIZE_X, SIZE_Y), float)
+pt = xgrid.Grid((SIZE_X, SIZE_Y), float)
 b = xgrid.Grid((SIZE_X, SIZE_Y), float)
-
-
-def init_random(x: xgrid.Grid):
-    for i in range(x.shape[0]):
-        for j in range(x.shape[1]):
-            x.now[i, j] = random.random() * 0.01
 
 
 u.boundary[0, :] = 1
@@ -42,13 +37,15 @@ v.boundary[-1, :] = 1
 v.boundary[:, 0] = 1
 v.boundary[:, -1] = 1
 
-init_random(u)
-init_random(v)
-
 p.boundary[:, -1] = 1
 p.boundary[0, :] = 2
 p.boundary[:, 0] = 3
 p.boundary[-1, :] = 4
+
+pt.boundary[:, -1] = 1
+pt.boundary[0, :] = 2
+pt.boundary[:, 0] = 3
+pt.boundary[-1, :] = 4
 
 b.boundary[0, :] = 1
 b.boundary[-1, :] = 1
@@ -62,20 +59,8 @@ X, Y = numpy.meshgrid(x, y)
 config = Config(1.0, 0.1, 0.001, 2 / (SIZE_X - 1), 2 / (SIZE_Y - 1))
 
 
-def build_up_b(b, rho, dt, u, v, dx, dy):
-    b[1:-1, 1:-1] = (rho * (1 / dt *
-                            ((u[1:-1, 2:] - u[1:-1, 0:-2]) /
-                             (2 * dx) + (v[2:, 1:-1] - v[0:-2, 1:-1]) / (2 * dy)) -
-                            ((u[1:-1, 2:] - u[1:-1, 0:-2]) / (2 * dx))**2 -
-                            2 * ((u[2:, 1:-1] - u[0:-2, 1:-1]) / (2 * dy) *
-                                 (v[1:-1, 2:] - v[1:-1, 0:-2]) / (2 * dx)) -
-                            ((v[2:, 1:-1] - v[0:-2, 1:-1]) / (2 * dy))**2))
-
-    return b
-
-
 @xgrid.kernel()
-def build_up_b_kernel(b: float2d, u: float2d, v: float2d, cfg: Config) -> None:
+def cavity_kernel(b: float2d, p: float2d, pt: float2d, u: float2d, v: float2d, cfg: Config) -> None:
     b[0, 0] = (cfg.rho * (1.0 / cfg.dt *
                           ((u[0, 1] - u[0, -1]) /
                            (2.0 * cfg.dx) + (v[1, 0] - v[-1, 0]) / (2.0 * cfg.dy)) -
@@ -84,22 +69,95 @@ def build_up_b_kernel(b: float2d, u: float2d, v: float2d, cfg: Config) -> None:
                                  (v[0, 1] - v[0, -1]) / (2.0 * cfg.dx)) -
                           ((v[1, 0] - v[-1, 0]) / (2.0 * cfg.dy))**2.0))
 
+    p[0, 0] = (((p[0, 1] + p[0, -1]) * cfg.dy**2.0 +
+                (p[1, 0] + p[-1, 0]) * cfg.dx**2.0) /
+               (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) -
+               cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
+               b[0, 0][0])
 
-p_ref = numpy.zeros((SIZE_X, SIZE_Y))
-b_ref = numpy.zeros((SIZE_X, SIZE_Y))
+    with xgrid.boundary(p, 1):
+        p[0, 0] = p[0, -1][0]  # dp/dx = 0 at x = 2
+    with xgrid.boundary(p, 2):
+        p[0, 0] = p[1, 0][0]   # dp/dy = 0 at y = 0
+    with xgrid.boundary(p, 3):
+        p[0, 0] = p[0, 1][0]   # dp/dx = 0 at x = 0
+    with xgrid.boundary(p, 4):
+        p[0, 0] = 0.0
 
-b_ref = build_up_b(b_ref, config.rho, config.dt,
-                   u.now.copy(), v.now.copy(), config.dx, config.dy)
+    for _ in range(0, 50):
+        pt[0, 0] = (((p[0, 1][0] + p[0, -1][0]) * cfg.dy**2.0 +
+                    (p[1, 0][0] + p[-1, 0][0]) * cfg.dx**2.0) /
+                    (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) -
+                    cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
+                    b[0, 0][0])
 
-build_up_b_kernel(b, u, v, config)
+        with xgrid.boundary(pt, 1):
+            pt[0, 0] = pt[0, -1][0]  # dp/dx = 0 at x = 2
+        with xgrid.boundary(pt, 2):
+            pt[0, 0] = pt[1, 0][0]   # dp/dy = 0 at y = 0
+        with xgrid.boundary(pt, 3):
+            pt[0, 0] = pt[0, 1][0]   # dp/dx = 0 at x = 0
+        with xgrid.boundary(pt, 4):
+            pt[0, 0] = 0.0
 
-pyplot.subplot(1, 3, 1)
-pyplot.imshow(b.now)
-pyplot.subplot(1, 3, 2)
-pyplot.imshow(b_ref)
-pyplot.subplot(1, 3, 3)
-pyplot.imshow(b.now - b_ref)
-pyplot.xlabel('X')
-pyplot.ylabel('Y')
+        p[0, 0] = (((pt[0, 1][0] + pt[0, -1][0]) * cfg.dy**2.0 +
+                    (pt[1, 0][0] + pt[-1, 0][0]) * cfg.dx**2.0) /
+                   (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) -
+                   cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
+                   b[0, 0][0])
 
-pyplot.savefig("imgs/cavity.png")
+        with xgrid.boundary(p, 1):
+            p[0, 0] = p[0, -1][0]  # dp/dx = 0 at x = 2
+        with xgrid.boundary(p, 2):
+            p[0, 0] = p[1, 0][0]   # dp/dy = 0 at y = 0
+        with xgrid.boundary(p, 3):
+            p[0, 0] = p[0, 1][0]   # dp/dx = 0 at x = 0
+        with xgrid.boundary(p, 4):
+            p[0, 0] = 0.0
+
+        u[0, 0] = (u[0, 0] -
+                   u[0, 0] * cfg.dt / cfg.dx *
+                   (u[0, 0] - u[0, -1]) -
+                   v[0, 0] * cfg.dt / cfg.dy *
+                   (u[0, 0] - u[-1, 0]) -
+                   cfg.dt / (2.0 * cfg.rho * cfg.dx) * (p[0, 1][0] - p[0, -1][0]) +
+                   cfg.nu * (cfg.dt / cfg.dx**2.0 *
+                             (u[0, 1] - 2.0 * u[0, 0] + u[0, -1]) +
+                             cfg.dt / cfg.dy**2.0 *
+                             (u[1, 0] - 2.0 * u[0, 0] + u[-1, 0])))
+
+        v[0, 0] = (v[0, 0] -
+                   u[0, 0] * cfg.dt / cfg.dx *
+                   (v[0, 0] - v[0, -1]) -
+                   v[0, 0] * cfg.dt / cfg.dy *
+                   (v[0, 0] - v[-1, 0]) -
+                   cfg.dt / (2.0 * cfg.rho * cfg.dy) * (p[1, 0][0] - p[-1, 0][0]) +
+                   cfg.nu * (cfg.dt / cfg.dx**2.0 *
+                             (v[0, 1] - 2.0 * v[0, 0] + v[0, -1]) +
+                             cfg.dt / cfg.dy**2.0 *
+                             (v[1, 0] - 2.0 * v[0, 0] + v[-1, 0])))
+
+        with xgrid.boundary(u, 1):
+            u[0, 0] = 0.0
+
+        with xgrid.boundary(u, 2):
+            u[0, 0] = 1.0
+
+        with xgrid.boundary(v, 1):
+            v[0, 0] = 0.0
+
+
+TIME = 1
+FRAMES = int(TIME / config.dt)
+
+fig = pyplot.figure(figsize=(11, 7), dpi=100)
+
+
+def cavity_tick(time_step):
+    pyplot.clf()
+    pyplot.imshow(p.now)
+    cavity_kernel(b, p, pt, u, v, config)
+
+print("saving image to imgs/cavity.gif")
+ani = animation.FuncAnimation(fig, cavity_tick, frames=tqdm.tqdm(range(FRAMES)), interval=1, repeat_delay=10)
+ani.save("imgs/cavity.gif", writer="pillow")
