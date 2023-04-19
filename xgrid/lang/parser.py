@@ -7,7 +7,7 @@ from struct import calcsize
 
 from xgrid.lang.ir import Location, Variable
 from xgrid.lang.ir.expression import Access, Binary, BinaryOperator, Call, Cast, Condition, Constant, Constructor, Expression, GridInfo, Identifier, Stencil, Terminal, Unary, UnaryOperator
-from xgrid.lang.ir.statement import Assignment, Boundary, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
+from xgrid.lang.ir.statement import Assignment, Definition, Break, Continue, Evaluation, For, If, Inline, Return, Signature, While
 from xgrid.util.init import get_config
 
 from xgrid.util.logging import Logger
@@ -77,7 +77,7 @@ class Parser:
         self.context_stack = [mode]
 
         self.scope: dict[str, Variable] = {}
-        self.tmpid = 0
+        self.boundary_mask = 0
         self.args: list[tuple[str, BaseType]] = []
         self.global_scope = func.__globals__
         self.global_scope.update({"int": int, "float": float, "bool": bool})
@@ -222,29 +222,17 @@ class Parser:
             self.context_stack.pop()
             return body
         elif global_obj == lang.boundary:
-            self.context_stack.append("boundary")
-            body = self.visits(node.body)
-            self.context_stack.pop()
-
             args = withitem.context_expr.args
-            if len(args) != 2 or not isinstance(args[0], ast.Name) or not isinstance(args[1], ast.Constant) or type(args[1].value) != int:
+            if len(args) != 1 or not isinstance(args[0], ast.Constant) or type(args[0].value) != int:
                 self.syntax_error(node, f"Invalid pragram switch 'boundary")
 
-            grid = self.resolve_local(args[0])
-            if not isinstance(grid, Identifier) or not isinstance(grid.variable.type, Grid):
-                self.syntax_error(
-                    node, f"Invalid pragma switch 'bounary' with call to '{grid}'")
-
-            return Boundary(self.location(node), grid.variable, args[1].value, body)
+            boundary_mask = args[0].value
+            self.boundary_mask = boundary_mask
+            body = self.visits(node.body)
+            self.boundary_mask = 0
+            return body
         else:
             self.syntax_error(node, f"Unknown pragma switch '{global_obj}'")
-
-    def temporary(self, type: BaseType) -> Variable:
-        name = "$" + str(self.tmpid)
-        self.tmpid += 1
-        variable = Variable(name, type)
-        self.scope[name] = variable
-        return variable
 
     def visit_Assign(self, node: ast.Assign):
         location = self.location(node)
@@ -470,7 +458,8 @@ class Parser:
 
         if isinstance(node, ast.Subscript):
             def extract_space(grid: ast.Subscript, time_offset: int):
-                if not isinstance(grid.value, ast.Name): # or self.context not in ("kernel", "critical", "boundary", "if"):
+                # or self.context not in ("kernel", "critical", "boundary", "if"):
+                if not isinstance(grid.value, ast.Name):
                     self.syntax_error(
                         grid, f"Incompatible subscript to '{grid.value.__class__.__name__}' under context '{self.context}'")
 
@@ -518,7 +507,7 @@ class Parser:
                     self.syntax_error(
                         grid, f"Incompatible subscript length '{len(spaces)}' with dimension {grid_var.type.dimension}")
 
-                return Stencil(location, grid_var.type.element, ctx, grid_var, time_offset, spaces)
+                return Stencil(location, grid_var.type.element, ctx, grid_var, time_offset, spaces, self.boundary_mask)
 
             if isinstance(node.value, ast.Subscript):
                 time_slice = node.slice
@@ -532,7 +521,7 @@ class Parser:
                 node = node.value
             else:
                 time_offset = 0 if context(node.ctx) == "store" else -1
- 
+
             return extract_space(node, time_offset)
 
         elif isinstance(node, ast.Attribute):

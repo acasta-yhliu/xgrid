@@ -75,13 +75,13 @@ def cavity_kernel(b: float2d, p: float2d, pt: float2d, u: float2d, v: float2d, c
                cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
                b[0, 0][0])
 
-    with xgrid.boundary(p, 1):
+    with xgrid.boundary(1):
         p[0, 0] = p[0, -1][0]  # dp/dx = 0 at x = 2
-    with xgrid.boundary(p, 2):
+    with xgrid.boundary(2):
         p[0, 0] = p[1, 0][0]   # dp/dy = 0 at y = 0
-    with xgrid.boundary(p, 3):
+    with xgrid.boundary(3):
         p[0, 0] = p[0, 1][0]   # dp/dx = 0 at x = 0
-    with xgrid.boundary(p, 4):
+    with xgrid.boundary(4):
         p[0, 0] = 0.0
 
     for _ in range(0, 50):
@@ -91,13 +91,13 @@ def cavity_kernel(b: float2d, p: float2d, pt: float2d, u: float2d, v: float2d, c
                     cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
                     b[0, 0][0])
 
-        with xgrid.boundary(pt, 1):
+        with xgrid.boundary(1):
             pt[0, 0] = pt[0, -1][0]  # dp/dx = 0 at x = 2
-        with xgrid.boundary(pt, 2):
+        with xgrid.boundary(2):
             pt[0, 0] = pt[1, 0][0]   # dp/dy = 0 at y = 0
-        with xgrid.boundary(pt, 3):
+        with xgrid.boundary(3):
             pt[0, 0] = pt[0, 1][0]   # dp/dx = 0 at x = 0
-        with xgrid.boundary(pt, 4):
+        with xgrid.boundary(4):
             pt[0, 0] = 0.0
 
         p[0, 0] = (((pt[0, 1][0] + pt[0, -1][0]) * cfg.dy**2.0 +
@@ -106,13 +106,13 @@ def cavity_kernel(b: float2d, p: float2d, pt: float2d, u: float2d, v: float2d, c
                    cfg.dx**2.0 * cfg.dy**2.0 / (2.0 * (cfg.dx**2.0 + cfg.dy**2.0)) *
                    b[0, 0][0])
 
-        with xgrid.boundary(p, 1):
+        with xgrid.boundary(1):
             p[0, 0] = p[0, -1][0]  # dp/dx = 0 at x = 2
-        with xgrid.boundary(p, 2):
+        with xgrid.boundary(2):
             p[0, 0] = p[1, 0][0]   # dp/dy = 0 at y = 0
-        with xgrid.boundary(p, 3):
+        with xgrid.boundary(3):
             p[0, 0] = p[0, 1][0]   # dp/dx = 0 at x = 0
-        with xgrid.boundary(p, 4):
+        with xgrid.boundary(4):
             p[0, 0] = 0.0
 
         u[0, 0] = (u[0, 0] -
@@ -137,17 +137,15 @@ def cavity_kernel(b: float2d, p: float2d, pt: float2d, u: float2d, v: float2d, c
                              cfg.dt / cfg.dy**2.0 *
                              (v[1, 0] - 2.0 * v[0, 0] + v[-1, 0])))
 
-        with xgrid.boundary(u, 1):
+        with xgrid.boundary(1):
             u[0, 0] = 0.0
-
-        with xgrid.boundary(u, 2):
-            u[0, 0] = 1.0
-
-        with xgrid.boundary(v, 1):
             v[0, 0] = 0.0
 
+        with xgrid.boundary(2):
+            u[0, 0] = 1.0
 
-TIME = 1
+
+TIME = 0.1
 FRAMES = int(TIME / config.dt)
 
 fig = pyplot.figure(figsize=(11, 7), dpi=100)
@@ -158,6 +156,8 @@ def cavity_tick(time_step):
     pyplot.imshow(p.now)
     cavity_kernel(b, p, pt, u, v, config)
 
+
 print("saving image to imgs/cavity.gif")
-ani = animation.FuncAnimation(fig, cavity_tick, frames=tqdm.tqdm(range(FRAMES)), interval=1, repeat_delay=10)
+ani = animation.FuncAnimation(fig, cavity_tick, frames=tqdm.tqdm(
+    range(FRAMES)), interval=1, repeat_delay=10)
 ani.save("imgs/cavity.gif", writer="pillow")
