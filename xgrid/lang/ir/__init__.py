@@ -24,10 +24,6 @@ class IR(Elementable):
 class Variable(Elementable):
     name: str
     type: BaseType
-    value: Any = None
 
     def write(self, format: ElementFormat):
         format.print(idvar("%" + self.name))
-
-
-

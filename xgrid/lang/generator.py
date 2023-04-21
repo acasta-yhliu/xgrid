@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from io import StringIO
-from typing import Optional
+from typing import Optional, cast
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
 import xgrid.lang.ir.expression as expr
@@ -63,7 +63,7 @@ class StencilParser(IRVisitor):
                 self.logger.dead(
                     f"Unable to perform load operation to grid '{ir.variable.name}' without stencil context")
 
-            if ir.time_offset == 0:
+            if ir.time_offset == 0 and self.stencil_flag.variable == ir.variable:
                 self.stencil_flag.implicit = True
 
     def visit_Assignment(self, ir: stat.Assignment):
@@ -272,34 +272,85 @@ class Generator:
         implementation.println(f"{self.visit(ir.value, implementation)};")
 
     def visit_Assignment(self, ir: stat.Assignment, implementation: LineFormat):
-        stencil_flag: Optional[StencilFlag] = getattr(
-            ir, "__stencil_flag", None)
+        stencil_flag = getattr(ir, "__stencil_flag", None)
 
-        if stencil_flag is None:
-            implementation.println(
-                f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
-        else:
-            if self.config.parallel:
-                implementation.println(
-                    f"#pragma omp parallel for collapse({stencil_flag.dimension})", indent=False)
+        if stencil_flag is not None:
+            def gen_head(s: StencilFlag):
+                for i in range(s.dimension):
+                    implementation.println(
+                        f"for (int32_t $dim{i} = 0; $dim{i} < {s.name}.shape[{i}]; $dim{i}++) {{")
+                    implementation.force_indent()
 
-            for i in range(stencil_flag.dimension):
+                id = " + ".join(
+                    f"$dim{s.dimension - i - 1} * {'1' if i == 0 else f'{s.name}.shape[{i - 1}]'}" for i in range(s.dimension))
                 implementation.println(
-                    f"for (int32_t $dim{i} = 0; $dim{i} < {stencil_flag.name}.shape[{i}]; $dim{i}++) {{")
+                    f"if ({s.name}.boundary_mask[{id}] == {s.boundary}) {{")
                 implementation.force_indent()
 
-            id = " + ".join(
-                f"$dim{stencil_flag.dimension - i - 1} * {'1' if i == 0 else f'{stencil_flag.name}.shape[{i - 1}]'}" for i in range(stencil_flag.dimension))
-            implementation.println(
-                f"if ({stencil_flag.name}.boundary_mask[{id}] == {stencil_flag.boundary}) {{")
-            implementation.force_indent()
+            def gen_tail(s: StencilFlag):
+                for i in range(s.dimension + 1):
+                    implementation.force_dedent()
+                    implementation.println("}")
 
+            stencil_flag = cast(StencilFlag, stencil_flag)
+
+            if stencil_flag.implicit and not self.config.parallel:
+                self.logger.dead(
+                    f"Unable to perform implicit operation while parallel is off")
+
+            if stencil_flag.implicit and stencil_flag.boundary == 0:
+                # TODO: handle implicit case
+                implementation.println("{")
+                with implementation.indent():
+                    # create a thread local intermediate value to store
+                    value_type = self.format_type(ir.value.type)
+                    value_size = " * ".join(
+                        f"{stencil_flag.name}.shape[{i}]" for i in range(stencil_flag.dimension))
+                    implementation.println(
+                        f"{value_type}* $value = malloc(sizeof({value_type}) * ({value_size}));")
+
+                    implementation.println(
+                        "#pragma omp parallel", indent=False)
+                    implementation.println("{")
+                    with implementation.indent():
+
+                        value_id = " + ".join(
+                            f"$dim{stencil_flag.dimension - i - 1} * {'1' if i == 0 else f'{stencil_flag.name}.shape[{i - 1}]'}" for i in range(stencil_flag.dimension))
+
+                        # load value to thread local value first
+                        implementation.println(
+                            f"#pragma omp for collapse({stencil_flag.dimension})", indent=False)
+                        gen_head(stencil_flag)
+                        implementation.println(
+                            f"$value[{value_id}] = {self.visit(ir.value, implementation)};")
+                        gen_tail(stencil_flag)
+
+                        # perform barrier operation
+                        implementation.println(
+                            "#pragma omp barrier", indent=False)
+
+                        # load value to grid then
+                        implementation.println(
+                            f"#pragma omp for collapse({stencil_flag.dimension})", indent=False)
+                        gen_head(stencil_flag)
+                        implementation.println(
+                            f"{self.visit(ir.terminal, implementation)} = $value[{value_id}];")
+                        gen_tail(stencil_flag)
+                    implementation.println("}")
+                    implementation.println("free($value);")
+                implementation.println("}")
+            else:
+                if self.config.parallel:
+                    implementation.println(
+                        f"#pragma omp parallel for collapse({stencil_flag.dimension})", indent=False)
+
+                gen_head(stencil_flag)
+                implementation.println(
+                    f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
+                gen_tail(stencil_flag)
+        else:
             implementation.println(
                 f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
-
-            for i in range(stencil_flag.dimension + 1):
-                implementation.force_dedent()
-                implementation.println("}")
 
     def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
         implementation.println(ir.source)
