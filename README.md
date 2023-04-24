@@ -61,4 +61,4 @@ assert np.sum(result.now) == np.dot(a.now, b.now)
 
 Solve the 2D Cavity flow with `xgrid`, see in examples folder.
 
-![cavity](./imgs/cavity.png)
+![cavity](imgs/cavity.png)

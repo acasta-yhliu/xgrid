@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xgrid"
+version = "0.0.1"
+authors = [
+  { name="yhl1219", email="yhliu2000@outlook.com" },
+]
+description = "Domain-specific language for developing partial differential equation solvers"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Code Generators",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yhl1219/xgrid"
+"Bug Tracker" = "https://github.com/yhl1219/xgrid/issues"
