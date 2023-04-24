@@ -6,6 +6,10 @@
 pip install xgrid
 ```
 
+## Test
+
+Invoke `python3 test.py` in the root folder to perform the test cases.
+
 ## Usage
 
 See document for more information. Let's start with a simple kernel, the element-wise multiplication of two grid:
@@ -52,3 +56,9 @@ We could check the result using numpy dot:
 ```
 assert np.sum(result.now) == np.dot(a.now, b.now)
 ```
+
+## Examples
+
+Solve the 2D Cavity flow with `xgrid`, see in examples folder.
+
+![cavity](./imgs/cavity.png)
