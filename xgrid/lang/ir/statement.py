@@ -138,17 +138,3 @@ class For(Statement):
                        self.start, plain(":"), self.end, plain(":"), self.step)
         with format.indent():
             format.print(*self.body)
-
-
-@dataclass
-class Boundary(Statement):
-    variable: Variable
-    mask: int
-    body: list[Statement]
-
-    def write(self, format: ElementFormat):
-        format.println(kw("bounary"), plain(
-            "("), self.variable, plain(","), plain(repr(self.mask)), plain(")"), kw("do"))
-        with format.indent():
-            format.print(*self.body)
-        format.println(kw("end"))

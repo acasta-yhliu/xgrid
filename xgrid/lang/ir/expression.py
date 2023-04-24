@@ -117,6 +117,7 @@ class Stencil(Terminal):
     variable: Variable
     time_offset: int
     space_offset: list[int]
+    boundary_mask: int = 0
 
     def __post_init__(self):
         assert isinstance(self.variable.type, Grid)

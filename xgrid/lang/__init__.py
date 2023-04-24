@@ -13,5 +13,5 @@ def c() -> StubContext:
     ...
 
 
-def boundary(field: Any, type: int) -> StubContext:
+def boundary(type: int) -> StubContext:
     ...

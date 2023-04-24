@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from io import StringIO
-from typing import Optional
+from typing import Optional, cast
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
 import xgrid.lang.ir.expression as expr
@@ -11,11 +12,38 @@ from xgrid.util.logging import Logger
 from xgrid.util.init import get_config
 from xgrid.util.typing import BaseType, Void
 from xgrid.util.typing.reference import Grid, Pointer
-from xgrid.util.typing.value import Boolean, Floating, Integer, Structure
+from xgrid.util.typing.value import Boolean, Floating, Integer, Structure, Value
 
 
 def repeat_str(element: str, time: int, sep: str):
     return sep.join(element for _ in range(time))
+
+
+@dataclass
+class StencilFlag:
+    variable: ir.Variable
+    boundary: int
+    implicit: bool = False
+
+    def __post_init__(self):
+        assert isinstance(self.variable.type, Grid)
+        self._type = self.variable.type
+
+    @property
+    def name(self) -> str:
+        return self.variable.name
+
+    @property
+    def element(self) -> Value:
+        return self._type.element
+
+    @property
+    def dimension(self) -> int:
+        return self._type.dimension
+
+    @property
+    def type(self) -> Grid:
+        return self._type
 
 
 class StencilParser(IRVisitor):
@@ -27,14 +55,16 @@ class StencilParser(IRVisitor):
 
     def visit_Stencil(self, ir: expr.Stencil):
         if ir.context == "store":
-            stencil_field = ir.variable.type
-            assert isinstance(stencil_field, Grid)
             assert self.stencil_flag is None
-            self.stencil_flag = (ir.variable.name, stencil_field.dimension)
+
+            self.stencil_flag = StencilFlag(ir.variable, ir.boundary_mask)
         elif ir.context == "load":
             if self.stencil_flag is None:
                 self.logger.dead(
                     f"Unable to perform load operation to grid '{ir.variable.name}' without stencil context")
+
+            if ir.time_offset == 0 and self.stencil_flag.variable == ir.variable:
+                self.stencil_flag.implicit = True
 
     def visit_Assignment(self, ir: stat.Assignment):
         self.visit(ir.terminal)
@@ -242,80 +272,88 @@ class Generator:
         implementation.println(f"{self.visit(ir.value, implementation)};")
 
     def visit_Assignment(self, ir: stat.Assignment, implementation: LineFormat):
-        stencil_flag: Optional[tuple[str, int]] = getattr(
-            ir, "__stencil_flag", None)
+        stencil_flag = getattr(ir, "__stencil_flag", None)
 
         if stencil_flag is not None:
-            gname, gdim = stencil_flag
+            def gen_head(s: StencilFlag):
+                for i in range(s.dimension):
+                    implementation.println(
+                        f"for (int32_t $dim{i} = 0; $dim{i} < {s.name}.shape[{i}]; $dim{i}++) {{")
+                    implementation.force_indent()
+
+                id = " + ".join(
+                    f"$dim{s.dimension - i - 1} * {'1' if i == 0 else f'{s.name}.shape[{i - 1}]'}" for i in range(s.dimension))
+                implementation.println(
+                    f"if ({s.name}.boundary_mask[{id}] == {s.boundary}) {{")
+                implementation.force_indent()
+
+            def gen_tail(s: StencilFlag):
+                for i in range(s.dimension + 1):
+                    implementation.force_dedent()
+                    implementation.println("}")
+
+            stencil_flag = cast(StencilFlag, stencil_flag)
+
+            if stencil_flag.implicit and not self.config.parallel:
+                self.logger.dead(
+                    f"Unable to perform implicit operation while parallel is off")
+
+            if stencil_flag.implicit and stencil_flag.boundary == 0:
+                # TODO: handle implicit case
+                implementation.println("{")
+                with implementation.indent():
+                    # create a thread local intermediate value to store
+                    value_type = self.format_type(ir.value.type)
+                    value_size = " * ".join(
+                        f"{stencil_flag.name}.shape[{i}]" for i in range(stencil_flag.dimension))
+                    implementation.println(
+                        f"{value_type}* $value = malloc(sizeof({value_type}) * ({value_size}));")
+
+                    implementation.println(
+                        "#pragma omp parallel", indent=False)
+                    implementation.println("{")
+                    with implementation.indent():
+
+                        value_id = " + ".join(
+                            f"$dim{stencil_flag.dimension - i - 1} * {'1' if i == 0 else f'{stencil_flag.name}.shape[{i - 1}]'}" for i in range(stencil_flag.dimension))
+
+                        # load value to thread local value first
+                        implementation.println(
+                            f"#pragma omp for collapse({stencil_flag.dimension})", indent=False)
+                        gen_head(stencil_flag)
+                        implementation.println(
+                            f"$value[{value_id}] = {self.visit(ir.value, implementation)};")
+                        gen_tail(stencil_flag)
+
+                        # perform barrier operation
+                        implementation.println(
+                            "#pragma omp barrier", indent=False)
+
+                        # load value to grid then
+                        implementation.println(
+                            f"#pragma omp for collapse({stencil_flag.dimension})", indent=False)
+                        gen_head(stencil_flag)
+                        implementation.println(
+                            f"{self.visit(ir.terminal, implementation)} = $value[{value_id}];")
+                        gen_tail(stencil_flag)
+                    implementation.println("}")
+                    implementation.println("free($value);")
+                implementation.println("}")
+            else:
+                if self.config.parallel:
+                    implementation.println(
+                        f"#pragma omp parallel for collapse({stencil_flag.dimension})", indent=False)
+
+                gen_head(stencil_flag)
+                implementation.println(
+                    f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
+                gen_tail(stencil_flag)
         else:
-            gname, gdim = "", 0
-
-        inside_boundary_handler = getattr(self, "__boundary_handler", False)
-        if inside_boundary_handler:
-            gdim = 0
-
-        if self.config.parallel and gdim != 0:
             implementation.println(
-                f"#pragma omp parallel for collapse({gdim})", indent=False)
-
-        for i in range(gdim):
-            implementation.println(
-                f"for (int32_t $dim{i} = 0; $dim{i} < {gname}.shape[{i}]; $dim{i}++) {{")
-            implementation.force_indent()
-
-        if gdim != 0:
-            id = " + ".join(
-                f"$dim{gdim - i - 1} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
-            implementation.println(f"if ({gname}.boundary_mask[{id}] == 0) {{")
-            implementation.force_indent()
-
-        implementation.println(
-            f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
-
-        if gdim != 0:
-            implementation.force_dedent()
-            implementation.println("}")
-
-        for i in range(gdim):
-            implementation.force_dedent()
-            implementation.println("}")
+                f"{self.visit(ir.terminal, implementation)} = {self.visit(ir.value, implementation)};")
 
     def visit_Inline(self, ir: stat.Inline, implementation: LineFormat):
         implementation.println(ir.source)
-
-    def visit_Boundary(self, ir: stat.Boundary, implementation: LineFormat):
-        assert isinstance(ir.variable.type, Grid)
-
-        gdim = ir.variable.type.dimension
-        gname = ir.variable.name
-
-        assert gdim != 0
-
-        if self.config.parallel:
-            implementation.println(
-                f"#pragma omp parallel for collapse({gdim})", indent=False)
-
-        for i in range(gdim):
-            implementation.println(
-                f"for (int32_t $dim{i} = 0; $dim{i} < {gname}.shape[{i}]; $dim{i}++) {{")
-            implementation.force_indent()
-
-        id = " + ".join(
-            f"$dim{gdim - i - 1} * {'1' if i == 0 else f'{gname}.shape[{i - 1}]'}" for i in range(gdim))
-        implementation.println(
-            f"if ({gname}.boundary_mask[{id}] == {ir.mask}) {{")
-        implementation.force_indent()
-
-        setattr(self, "__boundary_handler", True)
-        self.visits(ir.body, implementation)
-        delattr(self, "__boundary_handler")
-
-        implementation.force_dedent()
-        implementation.println("}")
-
-        for i in range(gdim):
-            implementation.force_dedent()
-            implementation.println("}")
 
     def visit_For(self, ir: stat.For, implementation: LineFormat):
         implementation.println(
