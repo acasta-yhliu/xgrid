@@ -3,6 +3,7 @@ import ctypes
 from hashlib import md5
 from shutil import which
 from subprocess import PIPE, Popen
+import sys
 from typing import IO, Callable, Iterable, cast
 
 from xgrid.util.logging import Logger
@@ -56,7 +57,11 @@ class Compiler:
             f"compiler initialized with cacheroot = '{self.cacheroot}', cc = '{self.cc}'")
 
     def compile(self, source: str, cflags: Iterable[str] = []):
-        args = [self.cc, "-fpic", "-shared"]
+        args = [self.cc, "-shared"]
+
+        if sys.platform != "win32":
+            args.append("-fpic")
+
         args.extend(cflags)
 
         source = f"// {' '.join(args)}\n" + source

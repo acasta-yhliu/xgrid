@@ -55,6 +55,8 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: 
             f"Minimum Python 3.10 is required, current version is {sys.version_info}")
 
     if sys.platform == "win32":
+        import shutil
+
         if not any(filter(shutil.which, cc)):
             solutions = ["    1. LLVM (https://llvm.org/)",
                          "    2. MinGW-w64 (https://www.mingw-w64.org/)",
