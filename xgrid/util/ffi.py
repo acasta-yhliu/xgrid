@@ -60,7 +60,7 @@ class Compiler:
         args = [self.cc, "-shared"]
 
         if sys.platform != "win32":
-            args.append("-fpic")
+            args.extend(["-fpic", "-lm"])
 
         args.extend(cflags)
 

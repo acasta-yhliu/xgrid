@@ -29,8 +29,6 @@ class Configuration:
 
         flags.append(f"-O{self.opt_level}")
 
-        flags.append(f"-lm")
-
         return flags
 
     @property
