@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from io import StringIO
+import sys
 from typing import Optional, cast
 import xgrid.lang.ir as ir
 import xgrid.lang.ir.statement as stat
@@ -100,7 +101,7 @@ class Generator:
         self.t_impls: dict[str, LineFormat] = {}
         self.depth = 0
 
-        self.define_operator(operator)
+        self.define_operator(operator, True)
 
     @property
     def result(self):
@@ -180,7 +181,7 @@ class Generator:
                     f"return &grid.data[time_offset][space_offset];")
             implementation.println("}")
 
-    def define_operator(self, operator: Operator):
+    def define_operator(self, operator: Operator, export: bool = False):
         if operator.name in self.op_impls:
             return
 
@@ -195,7 +196,15 @@ class Generator:
 
         arguments = ', '.join(
             map(lambda x: f"{self.format_type(x[1])} {x[0]}", opir.signature.arguments))
-        definition = f"{self.format_type(opir.signature.return_type)} {operator.name}({arguments})"
+        
+        if sys.platform == "win32" and export:
+            decl_export = "__declspec(dllexport)"
+            decl_call = "__cdecl"
+        else:
+            decl_export = ""
+            decl_call = ""
+
+        definition = f"{decl_export} {self.format_type(opir.signature.return_type)} {decl_call} {operator.name}({arguments})"
         self.definitions.println(
             ("extern " if operator.mode == "external" else "") + definition + ";")
 
