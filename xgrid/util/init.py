@@ -56,10 +56,7 @@ def init(*, parallel: bool = True, cc: list[str] = ["gcc", "clang"], cacheroot: 
         import shutil
 
         if not any(filter(shutil.which, cc)):
-            solutions = ["    1. LLVM (https://llvm.org/)",
-                         "    2. MinGW-w64 (https://www.mingw-w64.org/)",
-                         "    3. MSYS2 (https://www.msys2.org/)",
-                         "    4. Cygwin (https://www.cygwin.com/)"]
+            solutions = ["    LLVM (https://llvm.org/) + MSVC"]
             logger.fail(
                 f"Failed to find cc within {cc}, possible solutions are:", *solutions)
 
