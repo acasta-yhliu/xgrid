@@ -64,7 +64,7 @@ class StencilParser(IRVisitor):
                 self.logger.dead(
                     f"Unable to perform load operation to grid '{ir.variable.name}' without stencil context")
 
-            if ir.time_offset == 0 and self.stencil_flag.variable == ir.variable:
+            if ir.time_offset == 0 and self.stencil_flag.variable == ir.variable and ir.boundary_mask == 0:
                 self.stencil_flag.implicit = True
 
     def visit_Assignment(self, ir: stat.Assignment):
@@ -219,7 +219,9 @@ class Generator:
                 if name not in operator.signature.argnames_map:
                     implementation.println(
                         f"{self.format_type(var.type)} {name};")
-
+            
+            for macro in operator.macro: 
+                implementation.println(macro)
             self.visits(operator.ir.body, implementation)
         implementation.println("}")
 

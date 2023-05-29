@@ -11,7 +11,7 @@ CustomTypecheck = Callable[[list[BaseType]], BaseType]
 
 
 class Operator:
-    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None, typecheck_override: CustomTypecheck | None = None, tick: bool = True) -> None:
+    def __init__(self, func, mode: str, name: str | None = None, includes: list[str] | None = None, self_type: BaseType | None = None, typecheck_override: CustomTypecheck | None = None, tick: bool = True, macro: list[str] | None = None) -> None:
         self.func = func
         self.mode = mode
 
@@ -19,6 +19,7 @@ class Operator:
 
         self.name = func.__name__ if name is None else name
         self.includes = [] if includes is None else includes
+        self.macro = [] if macro is None else macro
 
         self.native = None
         self.self_type = self_type
@@ -52,7 +53,7 @@ class Operator:
             self._ir = parser.result
             self.includes.extend(parser.includes)
         return self._ir
-    
+
     @property
     def src(self) -> str:
         from xgrid.lang.generator import Generator
@@ -63,13 +64,13 @@ class Operator:
         return self.ir.signature
 
 
-def kernel(*, name: str | None = None, includes: list[str] | None = None, tick: bool = True):
+def kernel(*, name: str | None = None, includes: list[str] | None = None, tick: bool = True, macro: list[str] | None = None):
     def aux(func):
-        return Operator(func, "kernel", name, includes, tick=tick)
+        return Operator(func, "kernel", name, includes, tick=tick, macro=macro)
     return aux
 
 
-def function(*, method: bool = False, name: str | None = None, includes: list[str] | None = None):
+def function(*, method: bool = False, name: str | None = None, includes: list[str] | None = None, macro: list[str] | None = None):
     if method:
         def aux_method(func):
             setattr(func, "__xgrid_method", (name, includes))
@@ -77,7 +78,7 @@ def function(*, method: bool = False, name: str | None = None, includes: list[st
         return aux_method
     else:
         def aux(func):
-            return Operator(func, "function", name, includes)
+            return Operator(func, "function", name, includes, macro=macro)
         return aux
 
 
